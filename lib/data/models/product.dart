@@ -38,6 +38,10 @@ class Product {
     this.condition,
     this.warrantyMonths = 0,
     this.verified = false,
+    this.ram,
+    this.batteryHealth = 0,
+    this.soldCount = 0,
+    this.specs = const {},
   });
 
   final String id;
@@ -68,7 +72,72 @@ class Product {
   /// Passed GAMEX inspection.
   final bool verified;
 
+  /// e.g. "8GB".
+  final String? ram;
+
+  /// Battery health in percent (second-hand phones), 0 when unknown.
+  final int batteryHealth;
+  final int soldCount;
+
+  /// Key specifications, e.g. {'Display': '6.1" OLED 120Hz'}.
+  final Map<String, String> specs;
+
   bool get inStock => stock > 0;
+
+  /// Storage part of [variant] ("128GB").
+  String? get storage => variant?.split('•').first.trim();
+
+  /// Colour name part of [variant] ("Deep Purple").
+  String? get colorName {
+    final parts = variant?.split('•');
+    return parts == null || parts.length < 2 ? null : parts[1].trim();
+  }
+
+  /// "8GB / 128GB" (falls back to storage only).
+  String? get memoryLabel {
+    final s = storage;
+    if (s == null) return ram;
+    return ram == null ? s : '$ram / $s';
+  }
+
+  /// MRP (the crossed-out price).
+  double get mrp => oldPrice ?? price;
+
+  Product copyWith({
+    String? id,
+    double? price,
+    double? oldPrice,
+    String? variant,
+    String? condition,
+    String? ram,
+    int? batteryHealth,
+    int? stock,
+    List<int>? colors,
+  }) => Product(
+    id: id ?? this.id,
+    name: name,
+    brand: brand,
+    categoryId: categoryId,
+    description: description,
+    price: price ?? this.price,
+    oldPrice: oldPrice ?? this.oldPrice,
+    images: images,
+    rating: rating,
+    reviewCount: reviewCount,
+    stock: stock ?? this.stock,
+    sizes: sizes,
+    colors: colors ?? this.colors,
+    isFeatured: isFeatured,
+    isFlashSale: isFlashSale,
+    variant: variant ?? this.variant,
+    condition: condition ?? this.condition,
+    warrantyMonths: warrantyMonths,
+    verified: verified,
+    ram: ram ?? this.ram,
+    batteryHealth: batteryHealth ?? this.batteryHealth,
+    soldCount: soldCount,
+    specs: specs,
+  );
 
   int get discountPercent {
     final old = oldPrice;
@@ -96,6 +165,10 @@ class Product {
     condition: json['condition'] as String?,
     warrantyMonths: json['warrantyMonths'] as int? ?? 0,
     verified: json['verified'] as bool? ?? false,
+    ram: json['ram'] as String?,
+    batteryHealth: json['batteryHealth'] as int? ?? 0,
+    soldCount: json['soldCount'] as int? ?? 0,
+    specs: Map<String, String>.from(json['specs'] as Map? ?? const {}),
   );
 
   Map<String, dynamic> toJson() => {
@@ -118,6 +191,10 @@ class Product {
     'condition': condition,
     'warrantyMonths': warrantyMonths,
     'verified': verified,
+    'ram': ram,
+    'batteryHealth': batteryHealth,
+    'soldCount': soldCount,
+    'specs': specs,
   };
 }
 

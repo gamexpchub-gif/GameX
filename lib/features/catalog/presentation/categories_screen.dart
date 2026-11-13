@@ -1,14 +1,17 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/widgets/brand_marks.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/glass.dart';
+import '../../../core/widgets/listing_card.dart';
 import '../../../core/widgets/phone_art.dart';
 import '../../home/presentation/widgets/design_scale.dart';
 import '../../home/presentation/widgets/home_header.dart';
 import '../../home/presentation/widgets/home_sheets.dart';
+import '../providers/listings_provider.dart';
 
 const _img = 'assets/images/home';
 
@@ -94,7 +97,7 @@ const _banners = [
   ),
 ];
 
-class CategoriesScreen extends StatelessWidget {
+class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
 
   void _open(BuildContext context, String id) {
@@ -103,9 +106,13 @@ class CategoriesScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final k = context.k;
     final mq = MediaQuery.of(context);
+    final listings = ref.watch(listingsProvider);
+
+    Widget box(Widget child) => SliverToBoxAdapter(child: child);
+    Widget gap(double h) => SliverToBoxAdapter(child: SizedBox(height: h * k));
 
     return MediaQuery(
       data: mq.copyWith(textScaler: TextScaler.noScaling),
@@ -116,47 +123,135 @@ class CategoriesScreen extends StatelessWidget {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: AuroraBackground(
-            child: ListView(
-              padding: EdgeInsets.only(
-                top: mq.padding.top + 4 * k,
-                bottom: mq.padding.bottom + 30 * k,
+            child: NotificationListener<ScrollNotification>(
+              // Endless feed: fetch the next page ~1.5 screens before the end.
+              onNotification: (n) {
+                if (n.metrics.extentAfter < mq.size.height * 1.5) {
+                  ref.read(listingsProvider.notifier).loadMore();
+                }
+                return false;
+              },
+              child: RefreshIndicator(
+                edgeOffset: mq.padding.top,
+                onRefresh: () => ref.read(listingsProvider.notifier).refresh(),
+                child: CustomScrollView(
+                  slivers: [
+                    gap(mq.padding.top / k + 4),
+                    box(
+                      HomeHeader(
+                        notifications: 3,
+                        onBell: () => showNotificationsSheet(context),
+                        onAvatar: () => context.go('/profile'),
+                      ),
+                    ),
+                    gap(11),
+                    box(
+                      HomeSearchBar(
+                        height: 67,
+                        side: 30,
+                        onScan: () => showAppSnack(
+                          context,
+                          'IMEI / QR scanner coming soon',
+                        ),
+                      ),
+                    ),
+                    gap(20),
+                    box(const _BannerCarousel()),
+                    gap(34),
+                    box(
+                      _SectionTitle(
+                        title: 'Shop by Category',
+                        onViewAll: () => _open(context, 'others'),
+                      ),
+                    ),
+                    gap(19),
+                    box(_CategoryGrid(onTap: (id) => _open(context, id))),
+                    gap(33),
+                    box(
+                      _SmartChoiceCard(onTap: () => _open(context, 'others')),
+                    ),
+                    gap(33),
+                    box(
+                      _SectionTitle(
+                        title: 'Popular Collections',
+                        onViewAll: () => _open(context, 'others'),
+                      ),
+                    ),
+                    gap(20),
+                    box(_Collections(onTap: (id) => _open(context, id))),
+                    gap(40),
+                    box(
+                      _SectionTitle(
+                        title: 'New Listings',
+                        badge: 'LIVE',
+                        onViewAll: () => _open(context, 'others'),
+                      ),
+                    ),
+                    gap(20),
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: 30 * k),
+                      sliver: SliverGrid.builder(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 16 * k,
+                          crossAxisSpacing: 16 * k,
+                          mainAxisExtent: kListingCardHeight * k,
+                        ),
+                        itemCount: listings.items.length,
+                        itemBuilder: (_, i) => RepaintBoundary(
+                          child: ListingCard(product: listings.items[i]),
+                        ),
+                      ),
+                    ),
+                    box(
+                      _FeedFooter(
+                        state: listings,
+                        onRetry: () =>
+                            ref.read(listingsProvider.notifier).loadMore(),
+                      ),
+                    ),
+                    gap(mq.padding.bottom / k + 20),
+                  ],
+                ),
               ),
-              children: [
-                HomeHeader(
-                  notifications: 3,
-                  onBell: () => showNotificationsSheet(context),
-                  onAvatar: () => context.go('/profile'),
-                ),
-                SizedBox(height: 11 * k),
-                HomeSearchBar(
-                  height: 67,
-                  side: 30,
-                  onScan: () =>
-                      showAppSnack(context, 'IMEI / QR scanner coming soon'),
-                ),
-                SizedBox(height: 20 * k),
-                const _BannerCarousel(),
-                SizedBox(height: 34 * k),
-                _SectionTitle(
-                  title: 'Shop by Category',
-                  onViewAll: () => _open(context, 'others'),
-                ),
-                SizedBox(height: 19 * k),
-                _CategoryGrid(onTap: (id) => _open(context, id)),
-                SizedBox(height: 33 * k),
-                _SmartChoiceCard(onTap: () => _open(context, 'others')),
-                SizedBox(height: 33 * k),
-                _SectionTitle(
-                  title: 'Popular Collections',
-                  onViewAll: () => _open(context, 'others'),
-                ),
-                SizedBox(height: 20 * k),
-                _Collections(onTap: (id) => _open(context, id)),
-              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FeedFooter extends StatelessWidget {
+  const _FeedFooter({required this.state, required this.onRetry});
+  final ListingsState state;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final k = context.k;
+    Widget child;
+    if (state.error) {
+      child = TextButton.icon(
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh_rounded),
+        label: const Text('Could not load. Tap to retry'),
+      );
+    } else if (state.loading || state.hasMore) {
+      child = SizedBox(
+        width: 28 * k,
+        height: 28 * k,
+        child: const CircularProgressIndicator(strokeWidth: 2.5),
+      );
+    } else {
+      child = Text(
+        "You're all caught up 🎉",
+        style: TextStyle(fontSize: 18 * k, color: HomeColors.grey),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 28 * k),
+      child: Center(child: child),
     );
   }
 }
@@ -420,9 +515,14 @@ class _BannerCard extends StatelessWidget {
 // ───────────────────────────── Section title ─────────────────────────────
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.onViewAll});
+  const _SectionTitle({
+    required this.title,
+    required this.onViewAll,
+    this.badge,
+  });
   final String title;
   final VoidCallback onViewAll;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -450,6 +550,25 @@ class _SectionTitle extends StatelessWidget {
               color: HomeColors.ink,
             ),
           ),
+          if (badge != null) ...[
+            SizedBox(width: 12 * k),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 9 * k, vertical: 3 * k),
+              decoration: BoxDecoration(
+                color: HomeColors.red,
+                borderRadius: BorderRadius.circular(8 * k),
+              ),
+              child: Text(
+                badge!,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14 * k,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ],
           const Spacer(),
           GestureDetector(
             behavior: HitTestBehavior.opaque,

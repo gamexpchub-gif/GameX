@@ -352,16 +352,16 @@ abstract final class MockData {
     'p16': 'iphone_starlight',
   };
 
-  /// iPhones use real product photos; `images[1]` is the wide front+back
-  /// "deal" shot used on home deal cards.
+  /// iPhones use real product photos: the front+back shot first, then the
+  /// front-only shot.
   static List<String> _images(String id, int color) {
     final photo = _photo[id];
     if (photo == null) {
       return [art(color, 'duo'), art(color, 'back'), art(color, 'front')];
     }
     return [
-      'asset:assets/images/home/front_$photo.png',
       'asset:assets/images/home/deal_$photo.png',
+      'asset:assets/images/home/front_$photo.png',
     ];
   }
 
@@ -399,5 +399,86 @@ abstract final class MockData {
     condition: condition,
     warrantyMonths: warranty,
     verified: true,
+    colors: [color],
+    ram: _ram[id] ?? '8GB',
+    batteryHealth: 84 + (id.hashCode % 15).abs(),
+    soldCount: reviews * 3 + 120,
+    specs: _specs(brand, name),
   );
+
+  static const _ram = <String, String>{
+    'p1': '6GB',
+    'p2': '4GB',
+    'p3': '8GB',
+    'p4': '4GB',
+    'p16': '4GB',
+    'p5': '12GB',
+    'p6': '8GB',
+    'p7': '8GB',
+    'p8': '12GB',
+    'p9': '8GB',
+    'p10': '12GB',
+    'p11': '8GB',
+    'p12': '16GB',
+    'p13': '8GB',
+    'p14': '12GB',
+    'p15': '8GB',
+    'p17': '12GB',
+    'p18': '8GB',
+    'p19': '12GB',
+  };
+
+  static Map<String, String> _specs(String brand, String name) {
+    final apple = brand == 'Apple';
+    return {
+      'Display': apple
+          ? '6.1" Super Retina XDR OLED, 120Hz'
+          : '6.7" AMOLED, 120Hz, HDR10+',
+      'Processor': apple
+          ? 'Apple A-series Bionic'
+          : 'Snapdragon 8 series / flagship',
+      'Rear Camera': apple ? '48MP + 12MP + 12MP' : '50MP + 48MP + 12MP',
+      'Front Camera': '12MP',
+      'Battery': apple
+          ? '3200 mAh, 20W fast charge'
+          : '5000 mAh, 67W fast charge',
+      'OS': apple ? 'iOS (latest supported)' : 'Android (latest supported)',
+      'Network': '5G, Dual SIM (nano + eSIM)',
+      'In the box': 'Phone, charging cable, SIM tool',
+    };
+  }
+
+  // ───────────────────────── New listings feed ─────────────────────────
+
+  static const _grades = [
+    ('Like New', 1.06),
+    ('Excellent Condition', 1.0),
+    ('Good Condition', 0.9),
+  ];
+
+  /// Deterministic second-hand listing #n (id `<base>-l<n>`), so a listing
+  /// can be re-created from its id alone.
+  static Product listing(int n) {
+    final base = products[(n * 7) % products.length];
+    final (grade, factor) = _grades[n % _grades.length];
+    final price =
+        ((base.price * factor * (0.94 + (n % 5) * 0.03)) / 100).round() * 100 -
+        1.0;
+    return base.copyWith(
+      id: '${base.id}-l$n',
+      price: price,
+      condition: grade,
+      batteryHealth: 80 + (n * 13) % 20,
+      stock: 1 + n % 4,
+    );
+  }
+
+  static Product? byId(String id) {
+    final m = RegExp(r'^(p\d+)-l(\d+)$').firstMatch(id);
+    if (m != null) return listing(int.parse(m.group(2)!));
+    for (final p in products) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
 }

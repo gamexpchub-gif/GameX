@@ -547,10 +547,7 @@ class DealCard extends StatelessWidget {
     final p = product;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final ink = dark ? Colors.white : HomeColors.ink;
-    // images[1] is the wide front+back "deal" shot when available.
-    final image = p.images.length > 1 && p.images[1].startsWith('asset:')
-        ? p.images[1]
-        : p.images.first;
+    final image = p.images.first;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 35 * k),

@@ -43,6 +43,7 @@ abstract final class AppTheme {
             : AppColors.background,
         foregroundColor: isDark ? Colors.white : AppColors.textPrimary,
         titleTextStyle: TextStyle(
+          fontFamily: 'Inter',
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: isDark ? Colors.white : AppColors.textPrimary,
@@ -76,7 +77,11 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(_radius),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -86,7 +91,11 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(_radius),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       chipTheme: ChipThemeData(
@@ -99,7 +108,11 @@ abstract final class AppTheme {
         backgroundColor: scheme.surface,
         indicatorColor: AppColors.primary.withValues(alpha: 0.12),
         labelTextStyle: WidgetStateProperty.all(
-          const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       dividerTheme: DividerThemeData(color: border, thickness: 1),

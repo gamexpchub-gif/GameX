@@ -24,6 +24,9 @@ abstract interface class ProductRepository {
     ProductSort sort = ProductSort.popular,
   });
   Future<Product?> byId(String id);
+
+  /// Newest second-hand listings, paged (0-based). Empty when exhausted.
+  Future<List<Product>> newListings({required int page, int pageSize = 12});
 }
 
 class MockProductRepository implements ProductRepository {
@@ -76,9 +79,22 @@ class MockProductRepository implements ProductRepository {
   @override
   Future<Product?> byId(String id) async {
     await Future<void>.delayed(_latency);
-    for (final p in MockData.products) {
-      if (p.id == id) return p;
-    }
-    return null;
+    return MockData.byId(id);
+  }
+
+  static const _maxListings = 240;
+
+  @override
+  Future<List<Product>> newListings({
+    required int page,
+    int pageSize = 12,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    final start = page * pageSize;
+    if (start >= _maxListings) return const [];
+    return [
+      for (var n = start; n < start + pageSize && n < _maxListings; n++)
+        MockData.listing(n),
+    ];
   }
 }
