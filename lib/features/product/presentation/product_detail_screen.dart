@@ -82,13 +82,13 @@ class _ProductViewState extends ConsumerState<_ProductView> {
         .read(cartProvider.notifier)
         .add(p, quantity: _qty, size: _size, color: _color);
     if (buyNow) {
-      context.go('/cart');
+      context.push('/cart');
     } else {
       showAppSnack(
         context,
         'Added to cart',
         action: 'VIEW',
-        onAction: () => context.go('/cart'),
+        onAction: () => context.push('/cart'),
       );
     }
   }

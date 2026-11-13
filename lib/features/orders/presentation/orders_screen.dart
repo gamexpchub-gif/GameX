@@ -7,6 +7,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/common.dart';
 import '../../../data/models/order.dart';
+import '../../cart/providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
 
 Color orderStatusColor(OrderStatus s) => switch (s) {
@@ -50,7 +51,20 @@ class OrdersScreen extends ConsumerWidget {
     final orders = ref.watch(ordersProvider);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('My Orders')),
+      appBar: AppBar(
+        title: const Text('My Orders'),
+        actions: [
+          IconButton(
+            tooltip: 'Cart',
+            onPressed: () => context.push('/cart'),
+            icon: Badge(
+              isLabelVisible: ref.watch(cartCountProvider) > 0,
+              label: Text('${ref.watch(cartCountProvider)}'),
+              child: const Icon(Icons.shopping_cart_outlined),
+            ),
+          ),
+        ],
+      ),
       body: orders.isEmpty
           ? EmptyState(
               icon: Icons.receipt_long_outlined,
@@ -68,7 +82,7 @@ class OrdersScreen extends ConsumerWidget {
                 return Card(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () => context.push('/orders/${o.id}'),
+                    onTap: () => context.push('/order/${o.id}'),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
                       child: Column(

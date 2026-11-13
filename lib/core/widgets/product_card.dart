@@ -129,7 +129,7 @@ class ProductCard extends ConsumerWidget {
                                 context,
                                 'Added to cart',
                                 action: 'VIEW',
-                                onAction: () => context.go('/cart'),
+                                onAction: () => context.push('/cart'),
                               );
                             }
                           : null,

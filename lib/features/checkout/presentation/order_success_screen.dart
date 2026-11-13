@@ -92,8 +92,8 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                 const Spacer(),
                 FilledButton(
                   onPressed: () {
-                    context.go('/profile');
-                    context.push('/orders/${widget.orderId}');
+                    context.go('/orders');
+                    context.push('/order/${widget.orderId}');
                   },
                   child: const Text('Track Order'),
                 ),

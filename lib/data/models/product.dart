@@ -34,6 +34,10 @@ class Product {
     this.colors = const [],
     this.isFeatured = false,
     this.isFlashSale = false,
+    this.variant,
+    this.condition,
+    this.warrantyMonths = 0,
+    this.verified = false,
   });
 
   final String id;
@@ -53,6 +57,16 @@ class Product {
   final List<int> colors;
   final bool isFeatured;
   final bool isFlashSale;
+
+  /// e.g. "128GB • Deep Purple".
+  final String? variant;
+
+  /// Second-hand grade, e.g. "Excellent Condition".
+  final String? condition;
+  final int warrantyMonths;
+
+  /// Passed GAMEX inspection.
+  final bool verified;
 
   bool get inStock => stock > 0;
 
@@ -78,6 +92,10 @@ class Product {
     colors: List<int>.from(json['colors'] as List? ?? const []),
     isFeatured: json['isFeatured'] as bool? ?? false,
     isFlashSale: json['isFlashSale'] as bool? ?? false,
+    variant: json['variant'] as String?,
+    condition: json['condition'] as String?,
+    warrantyMonths: json['warrantyMonths'] as int? ?? 0,
+    verified: json['verified'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -96,21 +114,59 @@ class Product {
     'colors': colors,
     'isFeatured': isFeatured,
     'isFlashSale': isFlashSale,
+    'variant': variant,
+    'condition': condition,
+    'warrantyMonths': warrantyMonths,
+    'verified': verified,
   };
 }
 
+/// Home hero banner. Managed from the super admin panel later; until then
+/// [MockData.banners] provides 4 defaults.
 class PromoBanner {
   const PromoBanner({
     required this.id,
+    required this.badge,
     required this.title,
-    required this.subtitle,
-    required this.image,
-    this.categoryId,
+    required this.highlights,
+    required this.ctaLabel,
+    required this.gradient,
+    this.art = 'art:phone/FF5B3E96/back',
+    this.image,
+    this.link,
   });
 
   final String id;
+
+  /// Small pill above the title, e.g. "GAMEX Certified".
+  final String badge;
   final String title;
-  final String subtitle;
-  final String image;
-  final String? categoryId;
+
+  /// Shown as "Verified • Tested • Trusted".
+  final List<String> highlights;
+  final String ctaLabel;
+
+  /// ARGB colours of the background gradient (left → right).
+  final List<int> gradient;
+
+  /// Built-in phone illustration (`art:` spec) used when [image] is null.
+  final String art;
+
+  /// Optional uploaded banner image URL (from the admin panel).
+  final String? image;
+
+  /// In-app route opened on tap, e.g. `/category/apple`.
+  final String? link;
+
+  factory PromoBanner.fromJson(Map<String, dynamic> json) => PromoBanner(
+    id: json['id'] as String,
+    badge: json['badge'] as String? ?? '',
+    title: json['title'] as String,
+    highlights: List<String>.from(json['highlights'] as List? ?? const []),
+    ctaLabel: json['ctaLabel'] as String? ?? 'Shop Now',
+    gradient: List<int>.from(json['gradient'] as List),
+    art: json['art'] as String? ?? 'art:phone/FF5B3E96/back',
+    image: json['image'] as String?,
+    link: json['link'] as String?,
+  );
 }

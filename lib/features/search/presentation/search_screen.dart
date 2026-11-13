@@ -25,11 +25,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   static const _popular = [
     'iPhone',
-    'PlayStation',
-    'Headphones',
-    'Nike',
-    'Laptop',
-    'Watch',
+    'Galaxy',
+    'Pixel',
+    'OnePlus',
+    'vivo',
+    'Xiaomi',
   ];
 
   @override

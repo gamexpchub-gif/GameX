@@ -13,6 +13,7 @@ import '../../features/orders/presentation/order_detail_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/product/presentation/product_detail_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/reviews/presentation/reviews_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/splash/presentation/splash_screen.dart';
@@ -52,15 +53,12 @@ final appRouter = GoRouter(
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/cart', builder: (_, _) => const CartScreen()),
+            GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
           ],
         ),
         StatefulShellBranch(
           routes: [
-            GoRoute(
-              path: '/wishlist',
-              builder: (_, _) => const WishlistScreen(),
-            ),
+            GoRoute(path: '/reviews', builder: (_, _) => const ReviewsScreen()),
           ],
         ),
         StatefulShellBranch(
@@ -88,9 +86,10 @@ final appRouter = GoRouter(
       path: '/order-success/:id',
       builder: (_, s) => OrderSuccessScreen(orderId: s.pathParameters['id']!),
     ),
-    GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
+    GoRoute(path: '/cart', builder: (_, _) => const CartScreen()),
+    GoRoute(path: '/wishlist', builder: (_, _) => const WishlistScreen()),
     GoRoute(
-      path: '/orders/:id',
+      path: '/order/:id',
       builder: (_, s) => OrderDetailScreen(orderId: s.pathParameters['id']!),
     ),
   ],

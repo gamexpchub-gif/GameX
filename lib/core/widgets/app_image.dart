@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'phone_art.dart';
 import 'skeleton.dart';
 
 /// Network image with caching, skeleton placeholder and graceful error state.
@@ -22,6 +23,17 @@ class AppImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spec = PhoneArtSpec.tryParse(url);
+    if (spec != null) {
+      final art = SizedBox(
+        width: width,
+        height: height,
+        child: PhoneArt(spec: spec),
+      );
+      return borderRadius == null
+          ? art
+          : ClipRRect(borderRadius: borderRadius!, child: art);
+    }
     final image = CachedNetworkImage(
       imageUrl: url,
       fit: fit,

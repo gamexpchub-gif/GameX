@@ -30,15 +30,22 @@ void main() {
   });
 
   test('promo code applies discount and free delivery threshold', () {
-    final cheap = MockData.products.firstWhere((p) => p.price < 5000);
-    container.read(cartProvider.notifier).add(cheap);
+    final phone = MockData.products.firstWhere((p) => p.inStock);
+    container.read(cartProvider.notifier).add(phone);
     var summary = container.read(cartSummaryProvider);
-    expect(summary.deliveryFee, CartSummary.standardDelivery);
+    expect(phone.price >= CartSummary.freeDeliveryThreshold, isTrue);
+    expect(summary.deliveryFee, 0);
 
     expect(container.read(promoProvider.notifier).apply('gamex10'), isTrue);
     summary = container.read(cartSummaryProvider);
-    expect(summary.discount, (cheap.price * 0.10).roundToDouble());
+    expect(summary.discount, (phone.price * 0.10).roundToDouble());
     expect(container.read(promoProvider.notifier).apply('NOPE'), isFalse);
+  });
+
+  test('discount percent matches the design (iPhone 14 Pro 29% off)', () {
+    final p = MockData.products.firstWhere((p) => p.name == 'iPhone 14 Pro');
+    expect(p.discountPercent, 29);
+    expect(MockData.banners, hasLength(4));
   });
 
   test('cart persists across containers', () async {

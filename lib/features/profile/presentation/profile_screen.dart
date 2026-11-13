@@ -33,13 +33,13 @@ class ProfileScreen extends ConsumerWidget {
               _Stat(
                 label: 'Orders',
                 value: '$orders',
-                onTap: () => context.push('/orders'),
+                onTap: () => context.go('/orders'),
               ),
               const SizedBox(width: 10),
               _Stat(
                 label: 'Wishlist',
                 value: '$wish',
-                onTap: () => context.go('/wishlist'),
+                onTap: () => context.push('/wishlist'),
               ),
               const SizedBox(width: 10),
               _Stat(
@@ -55,7 +55,7 @@ class ProfileScreen extends ConsumerWidget {
               _Item(
                 Icons.receipt_long_outlined,
                 'My Orders',
-                onTap: () => context.push('/orders'),
+                onTap: () => context.go('/orders'),
               ),
               _Item(
                 Icons.location_on_outlined,
