@@ -28,8 +28,11 @@ class Address {
     required this.city,
     required this.area,
     required this.details,
+    this.label = 'Home',
   });
 
+  /// "Home", "Office" or "Other".
+  final String label;
   final String fullName;
   final String phone;
   final String city;
@@ -44,6 +47,7 @@ class Address {
     city: json['city'] as String,
     area: json['area'] as String,
     details: json['details'] as String,
+    label: json['label'] as String? ?? 'Home',
   );
 
   Map<String, dynamic> toJson() => {
@@ -52,7 +56,21 @@ class Address {
     'city': city,
     'area': area,
     'details': details,
+    'label': label,
   };
+
+  @override
+  bool operator ==(Object other) =>
+      other is Address &&
+      other.fullName == fullName &&
+      other.phone == phone &&
+      other.city == city &&
+      other.area == area &&
+      other.details == details &&
+      other.label == label;
+
+  @override
+  int get hashCode => Object.hash(fullName, phone, city, area, details, label);
 }
 
 class Order {

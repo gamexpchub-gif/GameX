@@ -55,7 +55,8 @@ class Glass extends StatelessWidget {
               ]
             : null,
       ),
-      child: child,
+      // Own Material so ListTiles / InkWells inside show their ripples.
+      child: Material(type: MaterialType.transparency, child: child),
     );
   }
 }

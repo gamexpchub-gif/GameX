@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gamex_shop/core/storage.dart';
+import 'package:gamex_shop/core/utils/validators.dart';
 import 'package:gamex_shop/data/mock/mock_data.dart';
 import 'package:gamex_shop/features/cart/providers/cart_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,5 +57,34 @@ void main() {
     );
     addTearDown(second.dispose);
     expect(second.read(cartProvider), hasLength(1));
+  });
+
+  test('deselected items are excluded from the summary', () {
+    final a = MockData.products[0];
+    final b = MockData.products[1];
+    final cart = container.read(cartProvider.notifier);
+    cart.add(a);
+    cart.add(b);
+    final keyB = container.read(cartProvider).last.key;
+    container.read(deselectedProvider.notifier).toggle(keyB);
+    final s = container.read(cartSummaryProvider);
+    expect(s.subtotal, a.price);
+    expect(s.itemCount, 1);
+    expect(s.mrpTotal, a.mrp);
+  });
+
+  test('coupon minimum order and cap', () {
+    final welcome = couponByCode('WELCOME20')!;
+    expect(couponDiscount(welcome, 10000), 0); // below minimum
+    expect(couponDiscount(welcome, 100000), 8000); // capped
+    expect(couponDiscount(couponByCode('BKASH500')!, 20000), 500);
+  });
+
+  test('card validation', () {
+    expect(Validators.cardNumber('4242 4242 4242 4242'), isNull);
+    expect(Validators.cardNumber('4242 4242 4242 4241'), isNotNull);
+    expect(Validators.cardExpiry('13/30'), isNotNull);
+    expect(Validators.cardExpiry('12/99'), isNull);
+    expect(Validators.cvv('12'), isNotNull);
   });
 }
