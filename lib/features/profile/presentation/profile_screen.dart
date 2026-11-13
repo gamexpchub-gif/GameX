@@ -177,8 +177,9 @@ class ProfileScreen extends ConsumerWidget {
                         ],
                       ),
                     );
-                    if (ok == true)
+                    if (ok == true) {
                       await ref.read(authProvider.notifier).logout();
+                    }
                   },
                 ),
               ],
