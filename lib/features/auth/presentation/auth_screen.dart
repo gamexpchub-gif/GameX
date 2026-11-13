@@ -16,6 +16,13 @@ const _muted = Color(0xFF5B6380);
 const _blue = Color(0xFF2F5CFF);
 const _rememberKey = 'remember_id_v1';
 
+/// Short screens (e.g. 360×740) get slightly shorter controls so the
+/// whole form still fits without scrolling.
+bool _compact(BuildContext c) {
+  final mq = MediaQuery.of(c);
+  return mq.size.height - mq.padding.vertical < 720;
+}
+
 /// Brand gradient used on the active tab and the primary button.
 const _brandGradient = LinearGradient(
   colors: [Color(0xFF12B3F6), Color(0xFF2F5CFF), Color(0xFF8B3DFF)],
@@ -47,17 +54,47 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  final _cardKey = GlobalKey();
+
+  /// Last measured card height; the header artwork shrinks so that
+  /// header + card + podium fit the screen without scrolling.
+  double _cardH = 560;
+
+  void _measure() {
+    final box = _cardKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize && (box.size.height - _cardH).abs() > 1) {
+      setState(() => _cardH = box.size.height);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final w = mq.size.width;
     final s = w / 1024; // artwork scale
+    final keyboard = mq.viewInsets.bottom > 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+
+    final podiumH = 184 * s;
+    final podiumOverlap = 30 * s;
+    final screenH = mq.size.height - mq.padding.top - mq.padding.bottom;
+    final headerMax = 318 * s;
+    final free = screenH - _cardH - 6;
+    // Drop the podium when there is not enough room for it.
+    final showPodium = !keyboard && free - (podiumH - podiumOverlap) >= 80;
+    final headerH = keyboard
+        ? 0.0
+        : (free - (showPodium ? podiumH - podiumOverlap : 0))
+              .clamp(70.0, headerMax)
+              .floorToDouble();
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
       ),
       child: Scaffold(
         backgroundColor: _bg,
+        resizeToAvoidBottomInset: true,
         body: Stack(
           children: [
             const Positioned.fill(
@@ -76,100 +113,101 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               ),
             ),
             SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: mq.size.height),
-                child: Column(
-                  children: [
-                    // Logo, swirl and 3D bag from the design (extends under the status bar).
-                    SizedBox(
-                      height: 318 * s + mq.padding.top,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // Full-width artwork below the status bar; its top edge
-                          // fades into the page colour so there is no seam.
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            height: 318 * s,
+              padding: EdgeInsets.only(
+                top: mq.padding.top + (keyboard ? 8 : 0),
+              ),
+              child: Column(
+                children: [
+                  // Logo, swirl and 3D bag from the design; shrinks to fit and
+                  // collapses while the keyboard is open.
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    height: headerH,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.bottomCenter,
+                        maxHeight: headerMax,
+                        child: SizedBox(
+                          height: headerMax,
+                          child: Transform.scale(
+                            scale: headerH == 0
+                                ? 1
+                                : (headerH / headerMax).clamp(0.55, 1.0),
+                            alignment: Alignment.bottomCenter,
                             child: ShaderMask(
                               blendMode: BlendMode.dstIn,
                               shaderCallback: (r) => const LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [Colors.transparent, Colors.black],
-                                stops: [0, 0.14],
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black,
+                                  Colors.black,
+                                  Colors.transparent,
+                                ],
+                                stops: [0, 0.14, 0.86, 1],
                               ).createShader(r),
                               child: Image.asset(
                                 '$_img/auth_top.jpg',
+                                width: w,
+                                height: headerMax,
                                 fit: BoxFit.fill,
                                 filterQuality: FilterQuality.medium,
                               ),
                             ),
                           ),
-                          const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Color(0x00F3F4F8),
-                                  Color(0x00F3F4F8),
-                                  Color(0xFFF3F4F8),
-                                ],
-                                stops: [0, 0.82, 1],
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Glass rings peeking out behind the card.
+                  ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (!keyboard) ...[
                         Positioned(
                           right: 0,
-                          top: 110 * s,
+                          top: 90 * s,
                           child: Image.asset(
                             '$_img/auth_ring_r.jpg',
-                            width: 96 * s * 1.15,
-                            height: 600 * s * 1.15,
+                            width: 110 * s,
+                            height: 690 * s,
                             fit: BoxFit.fill,
                           ),
                         ),
                         Positioned(
                           left: 0,
-                          top: 470 * s,
+                          top: 420 * s,
                           child: Image.asset(
                             '$_img/auth_ring_l.jpg',
-                            width: 94 * s * 1.15,
-                            height: 440 * s * 1.15,
+                            width: 108 * s,
+                            height: 506 * s,
                             fit: BoxFit.fill,
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: RepaintBoundary(
                           child: _GlassCard(
+                            key: _cardKey,
                             child: Column(
                               children: [
                                 _Tabs(
                                   index: _tab,
                                   onChanged: (i) => setState(() => _tab = i),
                                 ),
-                                const SizedBox(height: 22),
+                                const SizedBox(height: 16),
                                 AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 220),
+                                  duration: const Duration(milliseconds: 200),
                                   switchInCurve: Curves.easeOut,
-                                  transitionBuilder: (c, a) => FadeTransition(
-                                    opacity: a,
-                                    child: SizeTransition(
-                                      sizeFactor: a,
-                                      alignment: Alignment.topCenter,
-                                      child: c,
-                                    ),
+                                  transitionBuilder: (c, a) =>
+                                      FadeTransition(opacity: a, child: c),
+                                  layoutBuilder: (current, previous) => Stack(
+                                    alignment: Alignment.topCenter,
+                                    children: [...previous, ?current],
                                   ),
                                   child: _tab == 0
                                       ? _LoginForm(
@@ -179,71 +217,73 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                       : _RegisterForm(
                                           key: const ValueKey('register'),
                                           onDone: _done,
-                                          onLogin: () =>
-                                              setState(() => _tab = 0),
                                         ),
                                 ),
-                                const SizedBox(height: 22),
-                                const _TrustRow(),
+                                if (_tab == 0) ...[
+                                  const SizedBox(height: 14),
+                                  const _TrustRow(),
+                                ],
                               ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    // Podium the card stands on.
+                      ),
+                    ],
+                  ),
+                  if (showPodium)
                     Transform.translate(
-                      offset: Offset(0, -26 * s),
+                      offset: Offset(0, -podiumOverlap),
                       child: Image.asset(
                         '$_img/auth_podium.jpg',
                         width: w,
-                        height: 184 * s,
+                        height: podiumH,
                         fit: BoxFit.fill,
                       ),
-                    ),
-                    SizedBox(height: mq.padding.bottom),
-                  ],
-                ),
+                    )
+                  else
+                    SizedBox(height: keyboard ? 24 : 6),
+                ],
               ),
             ),
-            if (widget.redirectTo == null)
-              SafeArea(
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12, top: 4),
-                    child: TextButton(
-                      onPressed: _done,
-                      style: TextButton.styleFrom(
-                        foregroundColor: _ink,
-                        backgroundColor: Colors.white.withValues(alpha: 0.85),
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        shape: const StadiumBorder(
-                          side: BorderSide(color: Colors.white),
+            if (!keyboard)
+              if (widget.redirectTo == null)
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12, top: 4),
+                      child: TextButton(
+                        onPressed: _done,
+                        style: TextButton.styleFrom(
+                          foregroundColor: _ink,
+                          backgroundColor: Colors.white.withValues(alpha: 0.85),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          shape: const StadiumBorder(
+                            side: BorderSide(color: Colors.white),
+                          ),
+                        ),
+                        child: const Text(
+                          'Skip',
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
-                      child: const Text(
-                        'Skip',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                )
+              else
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: IconButton(
+                      onPressed: () => context.pop(),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: _ink,
                       ),
                     ),
                   ),
                 ),
-              )
-            else
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: _ink,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -255,7 +295,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
 /// Frosted glass slab with a visible thickness edge for a 3D look.
 class _GlassCard extends StatelessWidget {
-  const _GlassCard({required this.child});
+  const _GlassCard({super.key, required this.child});
   final Widget child;
 
   @override
@@ -275,7 +315,7 @@ class _GlassCard extends StatelessWidget {
         ],
       ),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(36),
           border: Border.all(color: Colors.white, width: 2),
@@ -328,7 +368,7 @@ class _Tabs extends StatelessWidget {
       ),
     );
     return Container(
-      height: 56,
+      height: 50,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F2F8),
@@ -396,7 +436,7 @@ class _Heading extends StatelessWidget {
         title,
         textAlign: TextAlign.center,
         style: const TextStyle(
-          fontSize: 29,
+          fontSize: 26,
           fontWeight: FontWeight.w800,
           color: _ink,
           letterSpacing: -0.6,
@@ -449,10 +489,10 @@ class _Field extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          height: 58,
+          height: _compact(context) ? 46 : 52,
           decoration: BoxDecoration(
             color: const Color(0xFFF5F6FA),
-            borderRadius: BorderRadius.circular(29),
+            borderRadius: BorderRadius.circular(26),
             border: Border.all(
               color: hasError ? const Color(0xFFE5283B) : Colors.white,
               width: 1.5,
@@ -556,10 +596,10 @@ class _GradientButton extends StatelessWidget {
     return GestureDetector(
       onTap: loading ? null : onTap,
       child: Container(
-        height: 62,
+        height: _compact(context) ? 50 : 56,
         decoration: BoxDecoration(
           gradient: _brandGradient,
-          borderRadius: BorderRadius.circular(31),
+          borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
               color: _blue.withValues(alpha: 0.38),
@@ -672,10 +712,10 @@ class _GoogleButton extends StatelessWidget {
         'Google sign-in will be enabled with the backend',
       ),
       child: Container(
-        height: 58,
+        height: _compact(context) ? 46 : 52,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(29),
+          borderRadius: BorderRadius.circular(26),
           border: Border.all(color: const Color(0xFFE6E9F2)),
           boxShadow: [
             BoxShadow(
@@ -813,7 +853,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
             title: 'Welcome Back 👋',
             subtitle: 'Login to your GAMEX account',
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           _Field(
             controller: _id,
             icon: Icons.phone_outlined,
@@ -827,7 +867,7 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
             onChanged: (_) =>
                 _idError == null ? null : setState(() => _idError = null),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _Field(
             controller: _password,
             icon: Icons.lock_outline_rounded,
@@ -880,16 +920,16 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _GradientButton(
             icon: Icons.login_rounded,
             label: 'Login to GAMEX',
             onTap: _submit,
             loading: _loading,
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           const _OrDivider(),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           const _GoogleButton(),
         ],
       ),
@@ -957,9 +997,8 @@ void _showForgot(BuildContext context, WidgetRef ref, String prefill) {
 // ───────────────────────────── Register ─────────────────────────────
 
 class _RegisterForm extends ConsumerStatefulWidget {
-  const _RegisterForm({super.key, required this.onDone, required this.onLogin});
+  const _RegisterForm({super.key, required this.onDone});
   final VoidCallback onDone;
-  final VoidCallback onLogin;
 
   @override
   ConsumerState<_RegisterForm> createState() => _RegisterFormState();
@@ -1060,7 +1099,7 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             title: 'Create Account ✨',
             subtitle: 'Join GAMEX in less than a minute',
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           _Field(
             controller: _name,
             icon: Icons.person_outline_rounded,
@@ -1070,7 +1109,7 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             error: _errors['name'],
             onChanged: (_) => _clear('name'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _Field(
             controller: _phone,
             icon: Icons.phone_outlined,
@@ -1080,7 +1119,7 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             error: _errors['phone'],
             onChanged: (_) => _clear('phone'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _Field(
             controller: _email,
             icon: Icons.mail_outline_rounded,
@@ -1090,7 +1129,7 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
             error: _errors['email'],
             onChanged: (_) => _clear('email'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _Field(
             controller: _password,
             icon: Icons.lock_outline_rounded,
@@ -1183,7 +1222,7 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _GradientButton(
             icon: Icons.person_add_alt_1_rounded,
             label: 'Create Account',
@@ -1192,29 +1231,8 @@ class _RegisterFormState extends ConsumerState<_RegisterForm> {
           ),
           const SizedBox(height: 20),
           const _OrDivider(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           const _GoogleButton(),
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: widget.onLogin,
-              child: const Text.rich(
-                TextSpan(
-                  text: 'Already have an account? ',
-                  style: TextStyle(color: _muted),
-                  children: [
-                    TextSpan(
-                      text: 'Login',
-                      style: TextStyle(
-                        color: _blue,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
