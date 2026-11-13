@@ -1,0 +1,109 @@
+import 'cart_item.dart';
+
+enum PaymentMethod {
+  cashOnDelivery('Cash on Delivery'),
+  bkash('bKash'),
+  nagad('Nagad'),
+  card('Debit / Credit Card');
+
+  const PaymentMethod(this.label);
+  final String label;
+}
+
+enum OrderStatus {
+  pending('Pending'),
+  confirmed('Confirmed'),
+  shipped('Shipped'),
+  delivered('Delivered'),
+  cancelled('Cancelled');
+
+  const OrderStatus(this.label);
+  final String label;
+}
+
+class Address {
+  const Address({
+    required this.fullName,
+    required this.phone,
+    required this.city,
+    required this.area,
+    required this.details,
+  });
+
+  final String fullName;
+  final String phone;
+  final String city;
+  final String area;
+  final String details;
+
+  String get oneLine => '$details, $area, $city';
+
+  factory Address.fromJson(Map<String, dynamic> json) => Address(
+    fullName: json['fullName'] as String,
+    phone: json['phone'] as String,
+    city: json['city'] as String,
+    area: json['area'] as String,
+    details: json['details'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'fullName': fullName,
+    'phone': phone,
+    'city': city,
+    'area': area,
+    'details': details,
+  };
+}
+
+class Order {
+  const Order({
+    required this.id,
+    required this.items,
+    required this.address,
+    required this.paymentMethod,
+    required this.subtotal,
+    required this.deliveryFee,
+    required this.discount,
+    required this.createdAt,
+    this.status = OrderStatus.pending,
+  });
+
+  final String id;
+  final List<CartItem> items;
+  final Address address;
+  final PaymentMethod paymentMethod;
+  final double subtotal;
+  final double deliveryFee;
+  final double discount;
+  final DateTime createdAt;
+  final OrderStatus status;
+
+  double get total => subtotal + deliveryFee - discount;
+  int get itemCount => items.fold(0, (sum, i) => sum + i.quantity);
+
+  factory Order.fromJson(Map<String, dynamic> json) => Order(
+    id: json['id'] as String,
+    items: (json['items'] as List)
+        .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    address: Address.fromJson(json['address'] as Map<String, dynamic>),
+    paymentMethod: PaymentMethod.values.byName(json['paymentMethod'] as String),
+    subtotal: (json['subtotal'] as num).toDouble(),
+    deliveryFee: (json['deliveryFee'] as num).toDouble(),
+    discount: (json['discount'] as num).toDouble(),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    status: OrderStatus.values.byName(json['status'] as String),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'items': items.map((e) => e.toJson()).toList(),
+    'address': address.toJson(),
+    'paymentMethod': paymentMethod.name,
+    'subtotal': subtotal,
+    'deliveryFee': deliveryFee,
+    'discount': discount,
+    'createdAt': createdAt.toIso8601String(),
+    'status': status.name,
+  };
+}
