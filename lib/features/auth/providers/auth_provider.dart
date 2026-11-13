@@ -21,22 +21,32 @@ class AuthNotifier extends Notifier<AppUser?> {
         (json) => AppUser.fromJson(json as Map<String, dynamic>),
       );
 
-  Future<void> login({required String email, required String password}) async {
+  /// [identifier] is a mobile number or an email address.
+  Future<void> login({
+    required String identifier,
+    required String password,
+  }) async {
     await Future<void>.delayed(const Duration(milliseconds: 700));
     if (password.length < 6) {
-      throw const AuthException('Incorrect email or password');
+      throw const AuthException('Incorrect mobile number or password');
     }
-    final name = email.split('@').first;
+    final isEmail = identifier.contains('@');
+    final name = isEmail ? identifier.split('@').first : 'GAMEX Customer';
     await _setUser(
       AppUser(
-        id: email.hashCode.toRadixString(16),
+        id: identifier.hashCode.toRadixString(16),
         name: name.isEmpty
             ? 'Customer'
             : name[0].toUpperCase() + name.substring(1),
-        email: email,
+        email: isEmail ? identifier : '',
+        phone: isEmail ? null : identifier,
       ),
     );
   }
+
+  /// Demo password reset: pretends to send an OTP.
+  Future<void> requestPasswordReset(String identifier) =>
+      Future<void>.delayed(const Duration(milliseconds: 800));
 
   Future<void> register({
     required String name,
