@@ -45,7 +45,7 @@ void showFeatureSheet(BuildContext context, int index) {
       Icons.verified_user_rounded,
       '100% Verified Phones',
       [
-        '70-point hardware & software inspection',
+        '52-point hardware & software inspection',
         'IMEI & ownership verified, no blacklisted devices',
         'Original parts only, factory reset & sanitised',
       ],

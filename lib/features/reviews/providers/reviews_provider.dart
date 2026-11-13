@@ -167,7 +167,7 @@ const _texts = [
   (
     5,
     'Worth every taka',
-    'Saved a lot compared to a new one. The 70-point check report gave me full confidence. Packaging was premium.',
+    'Saved a lot compared to a new one. The 52-point check report gave me full confidence. Packaging was premium.',
   ),
   (
     4,

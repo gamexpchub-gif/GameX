@@ -56,7 +56,7 @@ abstract final class MockData {
       id: 'b4',
       badge: '6 Month Warranty',
       title: 'Like-New\nPhones, Pro\nChecked',
-      highlights: const ['70-Point Check', '7-Day Return'],
+      highlights: const ['52-Point Check', '7-Day Return'],
       ctaLabel: 'Explore',
       gradient: const [0xFF2A0E5C, 0xFF5A1F9E, 0xFF9B3FD6],
       image: 'asset:assets/images/home/hero_banner_magenta.png',
@@ -65,7 +65,7 @@ abstract final class MockData {
   ];
 
   static const _desc =
-      'GAMEX Certified pre-owned phone. Passed our 70-point inspection covering '
+      'GAMEX Certified pre-owned phone. Passed our 52-point inspection covering '
       'display, battery health, cameras, speakers, sensors and network. '
       'Original parts, IMEI verified and factory reset. Comes with charger, '
       'warranty and a 7-day easy return.';
@@ -428,7 +428,51 @@ abstract final class MockData {
     'p19': '12GB',
   };
 
+  /// Studio hero photo (product page) per iPhone model, by product key.
+  static const pdpHero = <String, String>{
+    'p1': 'iphone_purple',
+    'p2': 'iphone_midnight',
+    'p3': 'iphone_titanium',
+    'p4': 'iphone_blue',
+    'p16': 'iphone_starlight',
+  };
+
+  static const _iphoneSpecs = <String, Map<String, String>>{
+    'iPhone 14 Pro': {
+      'Display': '6.1" Super Retina XDR',
+      'Processor': 'A16 Bionic Chip',
+      'Rear Camera': '48MP + 12MP + 12MP',
+      'Front Camera': '12MP TrueDepth',
+      'Battery': 'Up to 23 Hours',
+      'OS': 'iOS 17',
+    },
+    'iPhone 15 Pro Max': {
+      'Display': '6.7" Super Retina XDR',
+      'Processor': 'A17 Pro Chip',
+      'Rear Camera': '48MP + 12MP + 12MP 5x',
+      'Front Camera': '12MP TrueDepth',
+      'Battery': 'Up to 29 Hours',
+      'OS': 'iOS 17',
+    },
+    'iPhone 13': {
+      'Display': '6.1" Super Retina XDR',
+      'Processor': 'A15 Bionic Chip',
+      'Rear Camera': '12MP + 12MP',
+      'Front Camera': '12MP TrueDepth',
+      'Battery': 'Up to 19 Hours',
+      'OS': 'iOS 17',
+    },
+  };
+
   static Map<String, String> _specs(String brand, String name) {
+    final known = _iphoneSpecs[name];
+    if (known != null) {
+      return {
+        ...known,
+        'Network': '5G, Dual SIM (nano + eSIM)',
+        'In the box': 'Phone, USB-C cable, documentation',
+      };
+    }
     final apple = brand == 'Apple';
     return {
       'Display': apple

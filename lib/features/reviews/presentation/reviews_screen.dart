@@ -27,7 +27,7 @@ class ReviewsScreen extends StatelessWidget {
       'Nusrat J.',
       'Galaxy S23 Ultra',
       5,
-      'Exactly as described. The 70-point check report gave me full confidence.',
+      'Exactly as described. The 52-point check report gave me full confidence.',
       4,
     ),
     _Review(
