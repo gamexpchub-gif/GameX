@@ -65,10 +65,22 @@ class AuthNotifier extends Notifier<AppUser?> {
     );
   }
 
-  Future<void> updateProfile({required String name, String? phone}) async {
+  Future<void> updateProfile({
+    required String name,
+    String? phone,
+    String? email,
+  }) async {
     final u = state;
     if (u == null) return;
-    await _setUser(AppUser(id: u.id, name: name, email: u.email, phone: phone));
+    await _setUser(
+      AppUser(
+        id: u.id,
+        name: name,
+        email: email ?? u.email,
+        phone: phone,
+        joinedAt: u.joinedAt,
+      ),
+    );
   }
 
   Future<void> logout() async {
@@ -76,7 +88,18 @@ class AuthNotifier extends Notifier<AppUser?> {
     await ref.read(localStoreProvider).remove(LocalStore.user);
   }
 
-  Future<void> _setUser(AppUser user) async {
+  Future<void> _setUser(AppUser input) async {
+    final user = input.joinedAt != null
+        ? input
+        : AppUser(
+            id: input.id,
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            joinedAt: state?.id == input.id
+                ? state?.joinedAt ?? DateTime.now()
+                : DateTime.now(),
+          );
     state = user;
     await ref
         .read(localStoreProvider)
