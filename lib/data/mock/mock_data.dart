@@ -15,6 +15,9 @@ abstract final class MockData {
     Category(id: 'oneplus', name: 'OnePlus', icon: 'oneplus'),
     Category(id: 'vivo', name: 'vivo', icon: 'vivo'),
     Category(id: 'xiaomi', name: 'Redmi', icon: 'xiaomi'),
+    Category(id: 'realme', name: 'Realme', icon: 'realme'),
+    Category(id: 'nothing', name: 'Nothing', icon: 'nothing'),
+    Category(id: 'motorola', name: 'Motorola', icon: 'motorola'),
   ];
 
   /// The 4 default hero banners (replaced by admin-managed ones later).
@@ -68,6 +71,46 @@ abstract final class MockData {
       'warranty and a 7-day easy return.';
 
   static final products = <Product>[
+    _p(
+      'p17',
+      'Realme GT 6',
+      'Realme',
+      'realme',
+      34999,
+      46999,
+      4.5,
+      1800,
+      12,
+      '256GB • Fluid Silver',
+      0xFFC9CED8,
+    ),
+    _p(
+      'p18',
+      'Nothing Phone (2a)',
+      'Nothing',
+      'nothing',
+      27999,
+      36999,
+      4.6,
+      2400,
+      9,
+      '256GB • Milk White',
+      0xFFEDEDEA,
+      featured: true,
+    ),
+    _p(
+      'p19',
+      'Motorola Edge 50 Pro',
+      'Motorola',
+      'motorola',
+      31999,
+      42999,
+      4.5,
+      1300,
+      14,
+      '256GB • Luxe Lavender',
+      0xFFB7A6D6,
+    ),
     _p(
       'p1',
       'iPhone 14 Pro',

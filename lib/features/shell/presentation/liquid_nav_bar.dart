@@ -65,9 +65,9 @@ class GlassNavBar extends StatelessWidget {
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF2A3D8F)
-                  .withValues(alpha: dark ? 0.4 : 0.12),
-              blurRadius: 30,
-              offset: const Offset(0, 8),
+                  .withValues(alpha: dark ? 0.4 : 0.08),
+              blurRadius: 24,
+              blurStyle: BlurStyle.outer,
             ),
           ],
         ),

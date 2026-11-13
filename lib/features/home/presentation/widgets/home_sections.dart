@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_image.dart';
+import '../../../../core/widgets/brand_marks.dart';
 import '../../../../core/widgets/glass.dart';
 import '../../../../data/models/product.dart';
 import 'design_scale.dart';
@@ -398,12 +399,7 @@ class BrandStrip extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    '$_assets/brand_${b.icon}.png',
-                    width: 104 * k,
-                    height: 60 * k,
-                    filterQuality: FilterQuality.medium,
-                  ),
+                  BrandLogo(b.icon, width: 104 * k, height: 60 * k),
                   SizedBox(height: 2 * k),
                   Text(
                     b.name,

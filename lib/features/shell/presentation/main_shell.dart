@@ -14,13 +14,14 @@ class MainShell extends StatelessWidget {
       mq.size.width,
       mq.padding.bottom,
     );
-    final isHome = shell.currentIndex == 0;
+    // Home and Category are full-bleed designs that scroll under the bar.
+    final isHome = shell.currentIndex <= 1;
 
     return Scaffold(
       extendBody: true,
       body: Stack(
         children: [
-          // Home scrolls underneath the glass bar; other tabs stop above it.
+          // Full-bleed tabs scroll underneath the bar; others stop above it.
           Positioned.fill(
             bottom: isHome ? 0 : navSpace,
             child: MediaQuery(
