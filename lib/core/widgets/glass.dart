@@ -1,16 +1,17 @@
-import 'dart:ui';
-
 import 'package:material_ui/material_ui.dart';
 
-/// Frosted "liquid glass" surface: background blur, translucent fill,
-/// bright hairline edge and a soft drop shadow.
+/// Frosted surface used across the home screen.
+///
+/// Deliberately does NOT use `BackdropFilter`: live blur on many cards (and
+/// on the bottom bar while scrolling) was the main cause of jank on Android.
+/// A translucent fill + bright hairline edge + outer-only shadow gives the
+/// same look on the light backdrop at a fraction of the GPU cost.
 class Glass extends StatelessWidget {
   const Glass({
     super.key,
     required this.child,
     this.radius = 24,
-    this.blur = 24,
-    this.opacity = 0.62,
+    this.color,
     this.padding,
     this.shadow = true,
     this.borderColor,
@@ -18,8 +19,7 @@ class Glass extends StatelessWidget {
 
   final Widget child;
   final double radius;
-  final double blur;
-  final double opacity;
+  final Color? color;
   final EdgeInsetsGeometry? padding;
   final bool shadow;
   final Color? borderColor;
@@ -27,60 +27,40 @@ class Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final br = BorderRadius.circular(radius);
-    return DecoratedBox(
+    return Container(
+      padding: padding,
       decoration: BoxDecoration(
-        borderRadius: br,
+        color:
+            color ??
+            (dark
+                ? const Color(0xFF1B2133).withValues(alpha: 0.92)
+                : Colors.white.withValues(alpha: 0.72)),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color:
+              borderColor ??
+              (dark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.white.withValues(alpha: 0.95)),
+          width: 1.2,
+        ),
         boxShadow: shadow
             ? [
-                // Outer-only so it never shows through the translucent glass.
                 BoxShadow(
-                  color: const Color(0xFF1C2B6B)
-                      .withValues(alpha: dark ? 0.35 : 0.09),
-                  blurRadius: 22,
+                  color: const Color(0xFF2A3D8F)
+                      .withValues(alpha: dark ? 0.3 : 0.07),
+                  blurRadius: 18,
                   blurStyle: BlurStyle.outer,
                 ),
               ]
             : null,
       ),
-      child: ClipRRect(
-        borderRadius: br,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              borderRadius: br,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: dark
-                    ? [
-                        const Color(0xFF232A40).withValues(alpha: opacity),
-                        const Color(0xFF161B2B).withValues(alpha: opacity),
-                      ]
-                    : [
-                        Colors.white.withValues(alpha: opacity + 0.15),
-                        Colors.white.withValues(alpha: opacity - 0.1),
-                      ],
-              ),
-              border: Border.all(
-                color:
-                    borderColor ??
-                    Colors.white.withValues(alpha: dark ? 0.08 : 0.85),
-                width: 1.2,
-              ),
-            ),
-            child: child,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 }
 
-/// Soft blue-lavender backdrop with blurred colour blobs, used behind
-/// glass surfaces so the frosting is visible.
+/// Soft blue-lavender page backdrop sampled from the design.
 class AuroraBackground extends StatelessWidget {
   const AuroraBackground({super.key, required this.child});
   final Widget child;
@@ -88,53 +68,23 @@ class AuroraBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    Widget blob(Color c, double size) => Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [c, c.withValues(alpha: 0)]),
-      ),
-    );
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: dark
               ? const [Color(0xFF0E1222), Color(0xFF0B0E18)]
-              : const [Color(0xFFECEFFC), Color(0xFFF4F5FB), Color(0xFFF1F3FA)],
+              : const [
+                  Color(0xFFF0F4FF),
+                  Color(0xFFE6EDFD),
+                  Color(0xFFEEF2FD),
+                  Color(0xFFF5F7FE),
+                ],
+          stops: dark ? null : const [0, 0.25, 0.5, 1],
         ),
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -120,
-            left: -80,
-            child: blob(
-              const Color(0xFFC9D5FF).withValues(alpha: dark ? 0.15 : 0.7),
-              360,
-            ),
-          ),
-          Positioned(
-            top: 380,
-            right: -140,
-            child: blob(
-              const Color(0xFFDCD3FF).withValues(alpha: dark ? 0.12 : 0.6),
-              380,
-            ),
-          ),
-          Positioned(
-            bottom: -100,
-            left: -60,
-            child: blob(
-              const Color(0xFFD6E4FF).withValues(alpha: dark ? 0.12 : 0.6),
-              340,
-            ),
-          ),
-          Positioned.fill(child: child),
-        ],
-      ),
+      child: child,
     );
   }
 }

@@ -23,6 +23,26 @@ class AppImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (url.startsWith('asset:')) {
+      final img = Image.asset(
+        url.substring(6),
+        fit: BoxFit.contain,
+        width: width,
+        height: height,
+        filterQuality: FilterQuality.medium,
+      );
+      // Product photos sit on the same soft panel colour they were shot on.
+      final boxed = Container(
+        width: width,
+        height: height,
+        color: const Color(0xFFE8EDF9),
+        alignment: Alignment.center,
+        child: img,
+      );
+      return borderRadius == null
+          ? boxed
+          : ClipRRect(borderRadius: borderRadius!, child: boxed);
+    }
     final spec = PhoneArtSpec.tryParse(url);
     if (spec != null) {
       final art = SizedBox(

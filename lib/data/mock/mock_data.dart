@@ -25,8 +25,8 @@ abstract final class MockData {
       title: 'Premium\nSecond-Hand\nMobiles',
       highlights: const ['Verified', 'Tested', 'Trusted'],
       ctaLabel: 'Shop Now',
-      gradient: const [0xFF0A1F7A, 0xFF1537B8, 0xFF2B63E8],
-      art: art(0xFF5B3E96),
+      gradient: const [0xFF041659, 0xFF032B76, 0xFF2967D2],
+      image: 'asset:assets/images/home/hero_banner.png',
       link: '/category/all',
     ),
     PromoBanner(
@@ -36,7 +36,7 @@ abstract final class MockData {
       highlights: const ['Instant Quote', 'Free Pickup'],
       ctaLabel: 'Exchange Now',
       gradient: const [0xFF1E1065, 0xFF3B1FB0, 0xFF6D4BFF],
-      art: art(0xFF3A3D45),
+      image: 'asset:assets/images/home/hero_banner_violet.png',
       link: '/category/apple',
     ),
     PromoBanner(
@@ -46,7 +46,7 @@ abstract final class MockData {
       highlights: const ['No Cost', 'Easy Approval', '12 Months'],
       ctaLabel: 'Check EMI',
       gradient: const [0xFF06365E, 0xFF0A5BA8, 0xFF1C8BE0],
-      art: art(0xFF2F6DB5),
+      image: 'asset:assets/images/home/hero_banner_teal.png',
       link: '/category/samsung',
     ),
     PromoBanner(
@@ -56,7 +56,7 @@ abstract final class MockData {
       highlights: const ['70-Point Check', '7-Day Return'],
       ctaLabel: 'Explore',
       gradient: const [0xFF2A0E5C, 0xFF5A1F9E, 0xFF9B3FD6],
-      art: art(0xFFE9D7B8),
+      image: 'asset:assets/images/home/hero_banner_magenta.png',
       link: '/category/google',
     ),
   ];
@@ -301,6 +301,27 @@ abstract final class MockData {
     ),
   ];
 
+  static const _photo = <String, String>{
+    'p1': 'iphone14pro',
+    'p2': 'iphone_midnight',
+    'p3': 'iphone_titanium',
+    'p4': 'iphone_blue',
+    'p16': 'iphone_starlight',
+  };
+
+  /// iPhones use real product photos; `images[1]` is the wide front+back
+  /// "deal" shot used on home deal cards.
+  static List<String> _images(String id, int color) {
+    final photo = _photo[id];
+    if (photo == null) {
+      return [art(color, 'duo'), art(color, 'back'), art(color, 'front')];
+    }
+    return [
+      'asset:assets/images/home/front_$photo.png',
+      'asset:assets/images/home/deal_$photo.png',
+    ];
+  }
+
   static Product _p(
     String id,
     String name,
@@ -325,7 +346,7 @@ abstract final class MockData {
     description: _desc,
     price: price,
     oldPrice: oldPrice,
-    images: [art(color, 'duo'), art(color, 'back'), art(color, 'front')],
+    images: _images(id, color),
     rating: rating,
     reviewCount: reviews,
     stock: stock,

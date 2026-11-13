@@ -1,60 +1,10 @@
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/glass.dart';
 import 'design_scale.dart';
 
-/// GAMEX wordmark with gradient + tagline.
-class GamexLogo extends StatelessWidget {
-  const GamexLogo({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final k = context.k;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 277 * k,
-          height: 50 * k,
-          child: FittedBox(
-            fit: BoxFit.fill,
-            child: ShaderMask(
-              blendMode: BlendMode.srcIn,
-              shaderCallback: (r) => AppColors.logoGradient.createShader(r),
-              child: const Text(
-                'GAMEX',
-                style: TextStyle(
-                  fontSize: 64,
-                  height: 1,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 6,
-                ),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(height: 7 * k),
-        Padding(
-          padding: EdgeInsets.only(left: 37 * k),
-          child: Text(
-            'Buy Smart. Sell Smart.',
-            style: TextStyle(
-              fontSize: 21 * k,
-              height: 1,
-              fontWeight: FontWeight.w500,
-              color: dark ? Colors.white : HomeColors.ink,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
+/// Logo + bell. The block spans design y 100…192.
 class HomeHeader extends StatelessWidget {
   const HomeHeader({
     super.key,
@@ -69,69 +19,70 @@ class HomeHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(48 * k, 18 * k, 35 * k, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      height: 92 * k,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          const GamexLogo(),
-          const Spacer(),
-          GestureDetector(
-            onTap: onBell,
-            child: SizedBox(
-              width: 82 * k,
-              height: 82 * k,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    left: 0,
-                    top: 4 * k,
-                    child: Glass(
-                      radius: 39 * k,
-                      opacity: 0.7,
-                      child: SizedBox(
-                        width: 78 * k,
-                        height: 78 * k,
-                        child: Icon(
-                          Icons.notifications_none_rounded,
-                          size: 44 * k,
-                          color: dark ? Colors.white : HomeColors.ink,
-                        ),
-                      ),
-                    ),
+          Positioned(
+            left: 42 * k,
+            top: 0,
+            child: Image.asset(
+              'assets/images/home/logo_gamex.png',
+              width: 292 * k,
+              height: 92 * k,
+              filterQuality: FilterQuality.medium,
+              color: dark ? Colors.white : null,
+              colorBlendMode: dark ? BlendMode.srcIn : null,
+            ),
+          ),
+          // Bell: centre (778, 143) → top 104 in design px, 4 px into block.
+          Positioned(
+            left: 739 * k,
+            top: 4 * k,
+            child: GestureDetector(
+              onTap: onBell,
+              child: Glass(
+                radius: 39 * k,
+                color: Colors.white.withValues(alpha: 0.6),
+                child: SizedBox(
+                  width: 78 * k,
+                  height: 78 * k,
+                  child: Icon(
+                    Icons.notifications_none_rounded,
+                    size: 46 * k,
+                    color: dark ? Colors.white : HomeColors.ink,
                   ),
-                  if (notifications > 0)
-                    Positioned(
-                      right: -4 * k,
-                      top: -6 * k,
-                      child: Container(
-                        width: 34 * k,
-                        height: 34 * k,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: HomeColors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2.5 * k,
-                          ),
-                        ),
-                        child: Text(
-                          '$notifications',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17 * k,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
+          if (notifications > 0)
+            Positioned(
+              left: 783 * k,
+              top: 4 * k,
+              child: IgnorePointer(
+                child: Container(
+                  width: 34 * k,
+                  height: 34 * k,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: HomeColors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2.5 * k),
+                  ),
+                  child: Text(
+                    '$notifications',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18 * k,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -150,23 +101,21 @@ class HomeSearchBar extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 36 * k),
       child: Glass(
         radius: 38 * k,
-        opacity: 0.66,
+        color: dark ? null : const Color(0xFFE2EAFE),
         child: SizedBox(
           height: 76 * k,
           child: Row(
             children: [
               Expanded(
-                child: InkWell(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => context.push('/search'),
-                  borderRadius: BorderRadius.horizontal(
-                    left: Radius.circular(38 * k),
-                  ),
                   child: Row(
                     children: [
                       SizedBox(width: 30 * k),
                       Icon(
                         Icons.search_rounded,
-                        size: 42 * k,
+                        size: 44 * k,
                         color: dark ? Colors.white : HomeColors.ink,
                       ),
                       SizedBox(width: 18 * k),
@@ -176,7 +125,7 @@ class HomeSearchBar extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 22.5 * k,
+                            fontSize: 22 * k,
                             color: dark ? Colors.white70 : HomeColors.hint,
                             fontWeight: FontWeight.w400,
                           ),
@@ -188,17 +137,17 @@ class HomeSearchBar extends StatelessWidget {
               ),
               Container(
                 width: 2.2 * k,
-                height: 36 * k,
-                color: const Color(0xFF7C8DC4).withValues(alpha: 0.7),
+                height: 38 * k,
+                color: const Color(0xFF6E86D6).withValues(alpha: 0.8),
               ),
-              InkWell(
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: onScan,
-                customBorder: const CircleBorder(),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(22 * k, 14 * k, 30 * k, 14 * k),
                   child: Icon(
                     Icons.center_focus_weak_rounded,
-                    size: 42 * k,
+                    size: 44 * k,
                     color: HomeColors.blue,
                   ),
                 ),

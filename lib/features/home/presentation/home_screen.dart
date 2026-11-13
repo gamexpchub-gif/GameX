@@ -73,14 +73,16 @@ class HomeScreen extends ConsumerWidget {
               edgeOffset: mq.padding.top,
               child: CustomScrollView(
                 slivers: [
-                  SliverToBoxAdapter(child: SizedBox(height: mq.padding.top)),
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: mq.padding.top + 8 * k),
+                  ),
                   SliverToBoxAdapter(
                     child: HomeHeader(
                       notifications: 3,
                       onBell: () => showNotificationsSheet(context),
                     ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 27 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 16 * k)),
                   SliverToBoxAdapter(
                     child: HomeSearchBar(
                       onScan: () => showAppSnack(
@@ -106,7 +108,7 @@ class HomeScreen extends ConsumerWidget {
                           error: (_, _) => const SizedBox.shrink(),
                         ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 21 * k)),
                   SliverToBoxAdapter(
                     child: FeatureRow(
                       onTap: (i) => showFeatureSheet(context, i),
@@ -121,7 +123,7 @@ class HomeScreen extends ConsumerWidget {
                       onEmi: () => showEmiSheet(context),
                     ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 42 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 35 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(
                       title: 'Popular Brands',
@@ -132,19 +134,19 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   SliverToBoxAdapter(child: SizedBox(height: 20 * k)),
                   SliverToBoxAdapter(child: _Brands()),
-                  SliverToBoxAdapter(child: SizedBox(height: 40 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 34 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(
                       title: 'Top Deals for You',
-                      leading: Icon(
-                        Icons.auto_awesome_rounded,
-                        size: 36 * k,
-                        color: const Color(0xFFFFC21A),
+                      leading: Image.asset(
+                        'assets/images/home/icon_sparkle.png',
+                        width: 42 * k,
+                        height: 48 * k,
                       ),
                       trailing: const DealCountdown(),
                     ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 20 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 16 * k)),
                   ..._deals(context, ref, k),
                   SliverToBoxAdapter(
                     child: SizedBox(height: mq.padding.bottom + 24 * k),
@@ -215,7 +217,7 @@ class _Brands extends ConsumerWidget {
     return ref
         .watch(categoriesProvider)
         .when(
-          loading: () => SizedBox(height: 112 * k),
+          loading: () => SizedBox(height: 108 * k),
           error: (_, _) => const SizedBox.shrink(),
           data: (brands) => BrandStrip(
             brands: brands,

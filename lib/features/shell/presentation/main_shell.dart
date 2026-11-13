@@ -10,7 +10,7 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final navSpace = LiquidNavBar.occupiedHeight(
+    final navSpace = GlassNavBar.occupiedHeight(
       mq.size.width,
       mq.padding.bottom,
     );
@@ -34,32 +34,32 @@ class MainShell extends StatelessWidget {
             left: 0,
             right: 0,
             bottom: 0,
-            child: LiquidNavBar(
+            child: GlassNavBar(
               currentIndex: shell.currentIndex,
               onTap: (i) =>
                   shell.goBranch(i, initialLocation: i == shell.currentIndex),
               items: [
-                const LiquidNavItem(
+                const NavItem(
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home_rounded,
                   label: 'Home',
                 ),
-                const LiquidNavItem(
+                const NavItem(
                   icon: Icons.grid_view_outlined,
                   activeIcon: Icons.grid_view_rounded,
                   label: 'Category',
                 ),
-                const LiquidNavItem(
+                const NavItem(
                   icon: Icons.shopping_bag_outlined,
                   activeIcon: Icons.shopping_bag_rounded,
                   label: 'Order',
                 ),
-                const LiquidNavItem(
+                const NavItem(
                   icon: Icons.star_border_rounded,
                   activeIcon: Icons.star_rounded,
                   label: 'Review',
                 ),
-                const LiquidNavItem(
+                const NavItem(
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
                   label: 'Account',

@@ -36,14 +36,6 @@ class PhoneBackPainter extends CustomPainter {
     final r = Radius.circular(w * 0.17);
     final body = RRect.fromRectAndRadius(Offset.zero & size, r);
 
-    // Soft drop shadow.
-    canvas.drawRRect(
-      body.shift(Offset(w * 0.04, w * 0.06)),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.28)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.06),
-    );
-
     // Metal frame.
     canvas.drawRRect(
       body,
@@ -189,12 +181,6 @@ class PhoneFrontPainter extends CustomPainter {
     final body = RRect.fromRectAndRadius(
       Offset.zero & size,
       Radius.circular(w * 0.17),
-    );
-    canvas.drawRRect(
-      body.shift(Offset(w * 0.04, w * 0.06)),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.28)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.06),
     );
     canvas.drawRRect(
       body,
@@ -366,79 +352,4 @@ class PhoneArt extends StatelessWidget {
       },
     );
   }
-}
-
-/// Translucent glass ring orbiting the hero phone.
-class GlassRingPainter extends CustomPainter {
-  const GlassRingPainter(this.t);
-
-  /// 0..1 animation phase.
-  final double t;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    canvas.save();
-    canvas.translate(c.dx, c.dy);
-    canvas.rotate(-0.16 + math.sin(t * math.pi * 2) * 0.025);
-    final rect = Rect.fromCenter(
-      center: Offset.zero,
-      width: size.width * 0.98,
-      height: size.height * 0.5,
-    );
-    final sweep = SweepGradient(
-      colors: [
-        Colors.white.withValues(alpha: 0.85),
-        const Color(0xFF9CC2FF).withValues(alpha: 0.25),
-        Colors.white.withValues(alpha: 0.7),
-        const Color(0xFF7EA8FF).withValues(alpha: 0.15),
-        Colors.white.withValues(alpha: 0.85),
-      ],
-      transform: GradientRotation(t * math.pi * 2),
-    ).createShader(rect);
-
-    canvas.drawOval(
-      rect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = size.width * 0.07
-        ..shader = sweep
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * 0.012),
-    );
-    canvas.drawOval(
-      rect.deflate(size.width * 0.01),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = size.width * 0.008
-        ..color = Colors.white.withValues(alpha: 0.9),
-    );
-    canvas.restore();
-
-    // Floating bubbles.
-    final rnd = math.Random(7);
-    for (var i = 0; i < 6; i++) {
-      final base = Offset(
-        size.width * rnd.nextDouble(),
-        size.height * (0.2 + rnd.nextDouble() * 0.7),
-      );
-      final dy = math.sin((t + i / 6) * math.pi * 2) * size.height * 0.02;
-      final r = size.width * (0.012 + rnd.nextDouble() * 0.022);
-      final p = base + Offset(0, dy);
-      canvas.drawCircle(
-        p,
-        r,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [
-              Colors.white.withValues(alpha: 0.95),
-              const Color(0xFF8FB4FF).withValues(alpha: 0.25),
-            ],
-            center: const Alignment(-0.4, -0.4),
-          ).createShader(Rect.fromCircle(center: p, radius: r)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(GlassRingPainter old) => old.t != t;
 }

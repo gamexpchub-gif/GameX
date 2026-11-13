@@ -152,7 +152,9 @@ class PromoBanner {
   /// Built-in phone illustration (`art:` spec) used when [image] is null.
   final String art;
 
-  /// Optional uploaded banner image URL (from the admin panel).
+  /// Banner artwork: `asset:` path for the defaults, or a network URL
+  /// uploaded from the admin panel. The badge/title/CTA are rendered live on
+  /// top of it; leave [title] empty for artwork with text already baked in.
   final String? image;
 
   /// In-app route opened on tap, e.g. `/category/apple`.

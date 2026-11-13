@@ -3,55 +3,23 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/utils/formatters.dart';
-import '../../../../core/widgets/brand_marks.dart';
+import '../../../../core/widgets/app_image.dart';
 import '../../../../core/widgets/glass.dart';
-import '../../../../core/widgets/phone_art.dart';
 import '../../../../data/models/product.dart';
 import 'design_scale.dart';
 
-// ───────────────────────────── Feature cards ─────────────────────────────
+const _assets = 'assets/images/home';
 
-class FeatureItem {
-  const FeatureItem(
-    this.icon,
-    this.iconColor,
-    this.tint,
-    this.line1,
-    this.line2,
-  );
-  final IconData icon;
-  final Color iconColor;
-  final Color tint;
-  final String line1;
-  final String line2;
-}
+// ───────────────────────────── Feature cards ─────────────────────────────
 
 class FeatureRow extends StatelessWidget {
   const FeatureRow({super.key, required this.onTap});
   final ValueChanged<int> onTap;
 
   static const items = [
-    FeatureItem(
-      Icons.verified_user_rounded,
-      Color(0xFF1F4FEA),
-      Color(0xFFDDE6FF),
-      '100%',
-      'Verified',
-    ),
-    FeatureItem(
-      Icons.battery_full_rounded,
-      Color(0xFF22B455),
-      Color(0xFFD9F5E3),
-      'Long Life',
-      'Battery',
-    ),
-    FeatureItem(
-      Icons.headset_mic_rounded,
-      Color(0xFF1F4FEA),
-      Color(0xFFDDE6FF),
-      '24/7',
-      'Support',
-    ),
+    ('verified', '100%', 'Verified'),
+    ('battery', 'Long Life', 'Battery'),
+    ('support', '24/7', 'Support'),
   ];
 
   @override
@@ -64,7 +32,12 @@ class FeatureRow extends StatelessWidget {
           for (var i = 0; i < items.length; i++) ...[
             if (i > 0) SizedBox(width: 17 * k),
             Expanded(
-              child: _FeatureCard(item: items[i], onTap: () => onTap(i)),
+              child: _FeatureCard(
+                icon: items[i].$1,
+                line1: items[i].$2,
+                line2: items[i].$3,
+                onTap: () => onTap(i),
+              ),
             ),
           ],
         ],
@@ -74,8 +47,16 @@ class FeatureRow extends StatelessWidget {
 }
 
 class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({required this.item, required this.onTap});
-  final FeatureItem item;
+  const _FeatureCard({
+    required this.icon,
+    required this.line1,
+    required this.line2,
+    required this.onTap,
+  });
+
+  final String icon;
+  final String line1;
+  final String line2;
   final VoidCallback onTap;
 
   @override
@@ -86,34 +67,41 @@ class _FeatureCard extends StatelessWidget {
       onTap: onTap,
       child: Glass(
         radius: 26 * k,
-        opacity: 0.6,
+        color: dark ? null : HomeColors.cardFill,
         child: SizedBox(
           height: 102 * k,
           child: Row(
             children: [
-              SizedBox(width: 18 * k),
-              Container(
-                width: 70 * k,
-                height: 70 * k,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [item.tint.withValues(alpha: 0.6), item.tint],
-                  ),
-                ),
-                child: Icon(item.icon, size: 40 * k, color: item.iconColor),
+              SizedBox(width: 16 * k),
+              Image.asset(
+                '$_assets/feature_$icon.png',
+                width: 72 * k,
+                height: 72 * k,
+                filterQuality: FilterQuality.medium,
               ),
               SizedBox(width: 16 * k),
               Expanded(
-                child: Text(
-                  '${item.line1}\n${item.line2}',
-                  maxLines: 2,
-                  style: TextStyle(
-                    fontSize: 21 * k,
-                    height: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: dark ? Colors.white : HomeColors.ink,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final line in [line1, line2])
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          line,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 21 * k,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.2 * k,
+                            color: dark ? Colors.white : HomeColors.ink,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Icon(
@@ -121,7 +109,7 @@ class _FeatureCard extends StatelessWidget {
                 size: 32 * k,
                 color: dark ? Colors.white70 : HomeColors.inkSoft,
               ),
-              SizedBox(width: 12 * k),
+              SizedBox(width: 6 * k),
             ],
           ),
         ),
@@ -149,53 +137,44 @@ class OfferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final k = context.k;
-    const ink = HomeColors.ink;
-    TextStyle s(double size, FontWeight w) =>
-        TextStyle(fontSize: size * k, fontWeight: w, color: ink, height: 1.25);
+    TextStyle s(double size, FontWeight w) => TextStyle(
+      fontSize: size * k,
+      fontWeight: w,
+      color: HomeColors.ink,
+      height: 1.2,
+      letterSpacing: -0.2 * k,
+    );
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 35 * k),
-      child: Container(
+      child: SizedBox(
         height: 220 * k,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30 * k),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFE8ECFF), Color(0xFFDCE2FF), Color(0xFFE4E3FF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.9),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2B3E9E).withValues(alpha: 0.07),
-              blurRadius: 26 * k,
-              blurStyle: BlurStyle.outer,
-            ),
-          ],
-        ),
         child: Stack(
-          clipBehavior: Clip.none,
           children: [
-            // Trade-in copy.
+            // Background with the three phones (from the design).
+            Positioned.fill(
+              child: Image.asset(
+                '$_assets/offer_card.png',
+                fit: BoxFit.fill,
+                filterQuality: FilterQuality.medium,
+              ),
+            ),
             Positioned(
               left: 23 * k,
-              top: 25 * k,
+              top: 26 * k,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Trade-In Your Old Phone',
-                    style: s(22.5, FontWeight.w700),
+                    style: s(22.5, FontWeight.w600),
                   ),
-                  SizedBox(height: 6 * k),
+                  SizedBox(height: 7 * k),
                   Text('Get Up to', style: s(22, FontWeight.w400)),
-                  SizedBox(height: 6 * k),
+                  SizedBox(height: 7 * k),
                   Text(
                     '${formatPrice(tradeInUpTo)} Off',
-                    style: s(31, FontWeight.w800),
+                    style: s(31, FontWeight.w700),
                   ),
                   SizedBox(height: 18 * k),
                   _PillButton(
@@ -208,33 +187,24 @@ class OfferCard extends StatelessWidget {
                 ],
               ),
             ),
-            // Three phones + exchange arrows.
             Positioned(
-              left: 362 * k,
-              top: 8 * k,
-              width: 245 * k,
-              height: 205 * k,
-              child: const _TradePhones(),
-            ),
-            // EMI copy.
-            Positioned(
-              left: 612 * k,
-              top: 25 * k,
+              left: 623 * k,
+              top: 26 * k,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Smart EMI', style: s(22.5, FontWeight.w800)),
-                  SizedBox(height: 6 * k),
+                  Text('Smart EMI', style: s(22.5, FontWeight.w700)),
+                  SizedBox(height: 7 * k),
                   Text('Starts From', style: s(22, FontWeight.w400)),
-                  SizedBox(height: 6 * k),
+                  SizedBox(height: 7 * k),
                   Text.rich(
                     TextSpan(
                       text: formatPrice(emiFrom),
                       children: [
-                        TextSpan(text: ' /mo', style: s(27, FontWeight.w700)),
+                        TextSpan(text: ' /mo', style: s(27, FontWeight.w600)),
                       ],
                     ),
-                    style: s(29, FontWeight.w800),
+                    style: s(29, FontWeight.w700),
                   ),
                   SizedBox(height: 20 * k),
                   _PillButton(
@@ -250,46 +220,6 @@ class OfferCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _TradePhones extends StatelessWidget {
-  const _TradePhones();
-
-  @override
-  Widget build(BuildContext context) {
-    final k = context.k;
-    final h = 178 * k;
-    Widget phone(double left, double top, double angle, Color c) => Positioned(
-      left: left,
-      top: top,
-      child: Transform.rotate(
-        angle: angle,
-        child: PhoneShape(color: c, height: h),
-      ),
-    );
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        phone(40 * k, 8 * k, -0.06, const Color(0xFFB9BEC9)),
-        phone(95 * k, 2 * k, 0, const Color(0xFF2B2E36)),
-        phone(152 * k, 6 * k, 0.06, const Color(0xFF7B5BC7)),
-        // Exchange arrows badge.
-        Positioned(
-          left: 76 * k,
-          top: 100 * k,
-          child: ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: (r) => const LinearGradient(
-              colors: [Color(0xFF21C26B), Color(0xFFC6E33A), Color(0xFFF7C934)],
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-            ).createShader(r),
-            child: Icon(Icons.sync_rounded, size: 90 * k),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -313,43 +243,30 @@ class _PillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     final fg = filled ? Colors.white : HomeColors.ink;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(height / 2),
-          gradient: filled
-              ? const LinearGradient(
-                  colors: [Color(0xFF2B5DFF), Color(0xFF1543D8)],
-                )
-              : null,
-          color: filled ? null : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: (filled ? const Color(0xFF1F4FEA) : Colors.black)
-                  .withValues(alpha: filled ? 0.3 : 0.06),
-              blurRadius: 14 * k,
-              offset: Offset(0, 6 * k),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: fg,
-                fontSize: 17.5 * k,
-                fontWeight: filled ? FontWeight.w700 : FontWeight.w600,
+    return Material(
+      color: filled ? HomeColors.blue : Colors.white,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 17.5 * k,
+                  fontWeight: filled ? FontWeight.w600 : FontWeight.w500,
+                ),
               ),
-            ),
-            SizedBox(width: 8 * k),
-            Icon(Icons.arrow_forward_rounded, size: 21 * k, color: fg),
-          ],
+              SizedBox(width: 8 * k),
+              Icon(Icons.arrow_forward_rounded, size: 21 * k, color: fg),
+            ],
+          ),
         ),
       ),
     );
@@ -377,14 +294,14 @@ class HomeSectionTitle extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 35 * k),
       child: Row(
         children: [
-          if (leading != null) ...[leading!, SizedBox(width: 8 * k)],
+          if (leading != null) ...[leading!, SizedBox(width: 6 * k)],
           Text(
             title,
             style: TextStyle(
               fontSize: 31 * k,
-              height: 1.1,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
+              height: 1.15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5 * k,
               color: dark ? Colors.white : HomeColors.ink,
             ),
           ),
@@ -404,23 +321,24 @@ class SeeAllButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 6 * k),
+        padding: EdgeInsets.fromLTRB(8 * k, 6 * k, 10 * k, 6 * k),
         child: Row(
           children: [
             Text(
               'See All',
               style: TextStyle(
                 fontSize: 22 * k,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: HomeColors.blue,
               ),
             ),
-            SizedBox(width: 10 * k),
+            SizedBox(width: 12 * k),
             Icon(
               Icons.arrow_forward_rounded,
-              size: 26 * k,
+              size: 27 * k,
               color: HomeColors.blue,
             ),
           ],
@@ -448,11 +366,11 @@ class BrandStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     return SizedBox(
-      height: 112 * k,
+      height: 108 * k,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
-        padding: EdgeInsets.symmetric(horizontal: 36 * k, vertical: 3 * k),
+        padding: EdgeInsets.symmetric(horizontal: 36 * k),
         itemCount: brands.length,
         separatorBuilder: (_, _) => SizedBox(width: 17 * k),
         itemBuilder: (_, i) {
@@ -460,39 +378,43 @@ class BrandStrip extends StatelessWidget {
           final active = b.id == selected;
           return GestureDetector(
             onTap: () => onSelect(b.id),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
+            child: Container(
               width: 128 * k,
               decoration: BoxDecoration(
+                color: const Color(0xFFFAFCFE),
                 borderRadius: BorderRadius.circular(24 * k),
                 border: Border.all(
-                  color: active ? HomeColors.blue : Colors.transparent,
-                  width: 2.4 * k,
+                  color: active ? HomeColors.blue : Colors.white,
+                  width: active ? 2.6 * k : 1.2,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
+                    blurRadius: 16,
+                    blurStyle: BlurStyle.outer,
+                  ),
+                ],
               ),
-              child: Glass(
-                radius: 22 * k,
-                opacity: active ? 0.85 : 0.6,
-                borderColor: active ? Colors.transparent : null,
-                shadow: !active,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      height: 50 * k,
-                      child: Center(child: BrandMark(b.icon, size: 46 * k)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    '$_assets/brand_${b.icon}.png',
+                    width: 104 * k,
+                    height: 60 * k,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                  SizedBox(height: 2 * k),
+                  Text(
+                    b.name,
+                    style: TextStyle(
+                      fontSize: 19.5 * k,
+                      height: 1.1,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                      color: active ? HomeColors.blue : HomeColors.ink,
                     ),
-                    SizedBox(height: 10 * k),
-                    Text(
-                      b.name,
-                      style: TextStyle(
-                        fontSize: 19.5 * k,
-                        fontWeight: FontWeight.w600,
-                        color: active ? HomeColors.blue : HomeColors.ink,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );
@@ -504,6 +426,7 @@ class BrandStrip extends StatelessWidget {
 
 // ───────────────────────────── Countdown ─────────────────────────────
 
+/// "Ends in 12 : 24 : 36". Only this small widget rebuilds each second.
 class DealCountdown extends StatefulWidget {
   const DealCountdown({super.key});
 
@@ -512,7 +435,7 @@ class DealCountdown extends StatefulWidget {
 }
 
 class _DealCountdownState extends State<DealCountdown> {
-  late Timer _timer;
+  late final Timer _timer;
   Duration _left = _remaining();
 
   static Duration _remaining() {
@@ -539,38 +462,53 @@ class _DealCountdownState extends State<DealCountdown> {
   Widget build(BuildContext context) {
     final k = context.k;
     String two(int n) => n.toString().padLeft(2, '0');
-    final time =
-        '${two(_left.inHours)} : ${two(_left.inMinutes % 60)} : ${two(_left.inSeconds % 60)}';
-    return Container(
-      height: 40 * k,
-      padding: EdgeInsets.symmetric(horizontal: 14 * k),
+    final digit = TextStyle(
+      fontSize: 19 * k,
+      color: HomeColors.red,
+      fontWeight: FontWeight.w700,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    Widget box(String v) => Container(
+      padding: EdgeInsets.symmetric(horizontal: 4 * k, vertical: 1 * k),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFE3E6).withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20 * k),
+        color: Colors.white.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(6 * k),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.alarm_rounded, size: 26 * k, color: HomeColors.red),
-          SizedBox(width: 8 * k),
-          Text(
-            'Ends in  ',
-            style: TextStyle(
-              fontSize: 18 * k,
-              color: HomeColors.red,
-              fontWeight: FontWeight.w500,
+      child: Text(v, style: digit),
+    );
+    Widget colon() => Padding(
+      padding: EdgeInsets.symmetric(horizontal: 3 * k),
+      child: Text(':', style: digit),
+    );
+    return RepaintBoundary(
+      child: Container(
+        height: 40 * k,
+        padding: EdgeInsets.only(left: 14 * k, right: 12 * k),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDE5E8),
+          borderRadius: BorderRadius.circular(20 * k),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.alarm_rounded, size: 27 * k, color: HomeColors.red),
+            SizedBox(width: 8 * k),
+            Text(
+              'Ends in',
+              style: TextStyle(
+                fontSize: 18 * k,
+                color: HomeColors.red,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-          Text(
-            time,
-            style: TextStyle(
-              fontSize: 19 * k,
-              color: HomeColors.red,
-              fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
+            SizedBox(width: 10 * k),
+            box(two(_left.inHours)),
+            colon(),
+            box(two(_left.inMinutes % 60)),
+            colon(),
+            box(two(_left.inSeconds % 60)),
+          ],
+        ),
       ),
     );
   }
@@ -580,8 +518,11 @@ class _DealCountdownState extends State<DealCountdown> {
 
 String compactCount(int n) {
   if (n >= 1000) {
-    final v = n / 1000;
-    return '${v.toStringAsFixed(v >= 10 ? 1 : 1).replaceAll('.0', '')}k';
+    final v = (n / 100).round() / 10;
+    final s = v == v.roundToDouble()
+        ? v.toStringAsFixed(0)
+        : v.toStringAsFixed(1);
+    return '${s}k';
   }
   return '$n';
 }
@@ -610,7 +551,10 @@ class DealCard extends StatelessWidget {
     final p = product;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final ink = dark ? Colors.white : HomeColors.ink;
-    final spec = PhoneArtSpec.tryParse(p.images.first);
+    // images[1] is the wide front+back "deal" shot when available.
+    final image = p.images.length > 1 && p.images[1].startsWith('asset:')
+        ? p.images[1]
+        : p.images.first;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 35 * k),
@@ -618,78 +562,53 @@ class DealCard extends StatelessWidget {
         onTap: onTap,
         child: Glass(
           radius: 30 * k,
-          opacity: 0.72,
+          color: dark ? null : Colors.white.withValues(alpha: 0.92),
           child: SizedBox(
-            height: 284 * k,
+            height: 278 * k,
             child: Row(
               children: [
-                // Image panel.
                 SizedBox(
                   width: 260 * k,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28 * k),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Color(0xFFF4F6FB), Color(0xFFE6EAF4)],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                            child: spec == null
-                                ? null
-                                : Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                      18 * k,
-                                      22 * k,
-                                      10 * k,
-                                      6 * k,
-                                    ),
-                                    child: PhoneArt(
-                                      spec: PhoneArtSpec(spec.color, 'duo'),
-                                      background: false,
-                                    ),
-                                  ),
-                          ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: AppImage(
+                          image,
+                          borderRadius: BorderRadius.circular(26 * k),
                         ),
-                        if (ribbon != null) _Ribbon(text: ribbon!),
-                        Positioned(
-                          right: 12 * k,
-                          top: 16 * k,
-                          child: GestureDetector(
-                            onTap: onWish,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
-                              transitionBuilder: (c, a) =>
-                                  ScaleTransition(scale: a, child: c),
-                              child: Icon(
-                                wished
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                key: ValueKey(wished),
-                                size: 34 * k,
-                                color: wished
-                                    ? HomeColors.red
-                                    : const Color(0xFF6B7591),
-                              ),
+                      ),
+                      if (ribbon != null) _Ribbon(text: ribbon!),
+                      Positioned(
+                        right: 10 * k,
+                        top: 12 * k,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onWish,
+                          child: Padding(
+                            padding: EdgeInsets.all(6 * k),
+                            child: Icon(
+                              wished
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 38 * k,
+                              color: wished
+                                  ? HomeColors.red
+                                  : const Color(0xFF5B6688),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(width: 28 * k),
-                // Details.
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
                       right: 9 * k,
                       top: 18 * k,
-                      bottom: 12 * k,
+                      bottom: 4 * k,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -701,11 +620,12 @@ class DealCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 28 * k,
                             height: 1.15,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.3 * k,
                             color: ink,
                           ),
                         ),
-                        SizedBox(height: 4 * k),
+                        SizedBox(height: 8 * k),
                         if (p.variant != null)
                           Text(
                             p.variant!,
@@ -717,63 +637,63 @@ class DealCard extends StatelessWidget {
                               color: dark ? Colors.white70 : HomeColors.muted,
                             ),
                           ),
-                        SizedBox(height: 8 * k),
+                        SizedBox(height: 12 * k),
                         Row(
                           children: [
                             Icon(
                               Icons.star_rounded,
-                              size: 26 * k,
-                              color: const Color(0xFFF5B400),
+                              size: 27 * k,
+                              color: const Color(0xFFF7B500),
                             ),
                             SizedBox(width: 6 * k),
                             Text(
                               p.rating.toStringAsFixed(1),
                               style: TextStyle(
                                 fontSize: 19 * k,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: HomeColors.amber,
                               ),
                             ),
+                            SizedBox(width: 6 * k),
                             Text(
-                              ' (${compactCount(p.reviewCount)} reviews)',
+                              '(${compactCount(p.reviewCount)} reviews)',
                               style: TextStyle(
                                 fontSize: 18.5 * k,
-                                color: const Color(0xFF8A93AD),
+                                color: HomeColors.grey,
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 12 * k),
+                        SizedBox(height: 14 * k),
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
                               formatPrice(p.price),
                               style: TextStyle(
                                 fontSize: 33 * k,
-                                height: 1.15,
-                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.4 * k,
                                 color: ink,
-                                letterSpacing: -0.3,
                               ),
                             ),
-                            SizedBox(width: 14 * k),
+                            SizedBox(width: 16 * k),
                             if (p.oldPrice != null)
                               Text(
                                 formatPrice(p.oldPrice!),
                                 style: TextStyle(
                                   fontSize: 22 * k,
-                                  color: const Color(0xFF8A93AD),
+                                  color: const Color(0xFF6B7591),
                                   decoration: TextDecoration.lineThrough,
-                                  decorationColor: const Color(0xFF8A93AD),
+                                  decorationColor: const Color(0xFF6B7591),
                                 ),
                               ),
-                            const Spacer(),
+                            SizedBox(width: 14 * k),
                             if (p.discountPercent > 0)
                               Container(
                                 height: 38 * k,
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: 14 * k,
+                                  horizontal: 15 * k,
                                 ),
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
@@ -784,22 +704,22 @@ class DealCard extends StatelessWidget {
                                   '${p.discountPercent}% OFF',
                                   style: TextStyle(
                                     fontSize: 20 * k,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w700,
                                     color: HomeColors.green,
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        SizedBox(height: 12 * k),
+                        SizedBox(height: 14 * k),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Row(
-                            spacing: 8 * k,
+                            spacing: 9 * k,
                             children: [
                               if (p.verified)
-                                _Chip(
+                                const _Chip(
                                   icon: Icons.verified_user_rounded,
                                   iconColor: HomeColors.blue,
                                   label: 'Verified',
@@ -807,13 +727,13 @@ class DealCard extends StatelessWidget {
                               if (p.condition != null)
                                 _Chip(
                                   icon: Icons.diamond_outlined,
-                                  iconColor: const Color(0xFF6C7CC9),
+                                  iconColor: const Color(0xFF5A6FD0),
                                   label: p.condition!,
                                 ),
                               if (p.warrantyMonths > 0)
                                 _Chip(
-                                  icon: Icons.shield_outlined,
-                                  iconColor: const Color(0xFF6C7CC9),
+                                  icon: Icons.gpp_good_outlined,
+                                  iconColor: const Color(0xFF5A6FD0),
                                   label: '${p.warrantyMonths} Month Warranty',
                                 ),
                             ],
@@ -845,27 +765,35 @@ class _Ribbon extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     return Positioned(
-      left: -44 * k,
-      top: 22 * k,
-      child: Transform.rotate(
-        angle: -0.785,
-        child: Container(
-          width: 200 * k,
-          height: 34 * k,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF2B5DFF), Color(0xFF1543D8)],
+      left: -4 * k,
+      top: -4 * k,
+      width: 140 * k,
+      height: 140 * k,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned(
+              left: -52 * k,
+              top: 30 * k,
+              child: Transform.rotate(
+                angle: -0.785,
+                child: Container(
+                  width: 200 * k,
+                  height: 36 * k,
+                  alignment: Alignment.center,
+                  color: HomeColors.blue,
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18.5 * k,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18 * k,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -886,18 +814,17 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = context.k;
     return Container(
-      height: 32 * k,
-      padding: EdgeInsets.symmetric(horizontal: 10 * k),
+      height: 33 * k,
+      padding: EdgeInsets.symmetric(horizontal: 11 * k),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(8 * k),
-        border: Border.all(color: const Color(0xFFE3E7F3)),
+        color: const Color(0xFFEDF0FF),
+        borderRadius: BorderRadius.circular(17 * k),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 19 * k, color: iconColor),
-          SizedBox(width: 6 * k),
+          Icon(icon, size: 20 * k, color: iconColor),
+          SizedBox(width: 7 * k),
           Text(
             label,
             style: TextStyle(
@@ -912,54 +839,29 @@ class _Chip extends StatelessWidget {
   }
 }
 
-class _AddToCartButton extends StatefulWidget {
+class _AddToCartButton extends StatelessWidget {
   const _AddToCartButton({required this.onTap});
   final VoidCallback? onTap;
 
   @override
-  State<_AddToCartButton> createState() => _AddToCartButtonState();
-}
-
-class _AddToCartButtonState extends State<_AddToCartButton> {
-  bool _down = false;
-
-  @override
   Widget build(BuildContext context) {
     final k = context.k;
-    final enabled = widget.onTap != null;
-    return GestureDetector(
-      onTapDown: enabled ? (_) => setState(() => _down = true) : null,
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _down ? 0.95 : 1,
-        duration: const Duration(milliseconds: 120),
-        child: Container(
+    final enabled = onTap != null;
+    return Material(
+      color: enabled ? HomeColors.blue : const Color(0xFF9AA5C4),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: SizedBox(
           width: 331 * k,
           height: 52 * k,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26 * k),
-            gradient: LinearGradient(
-              colors: enabled
-                  ? const [Color(0xFF2B5DFF), Color(0xFF1543D8)]
-                  : const [Color(0xFFA3AEC9), Color(0xFF8D97B3)],
-            ),
-            boxShadow: [
-              if (enabled)
-                BoxShadow(
-                  color: const Color(0xFF1F4FEA).withValues(alpha: 0.22),
-                  blurRadius: 14 * k,
-                  offset: Offset(0, 4 * k),
-                ),
-            ],
-          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 Icons.shopping_cart_outlined,
-                size: 28 * k,
+                size: 29 * k,
                 color: Colors.white,
               ),
               SizedBox(width: 12 * k),
@@ -968,7 +870,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 21 * k,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

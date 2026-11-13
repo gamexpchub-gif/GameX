@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 /// Brand palette for GAMEX (matched to the home screen design).
 abstract final class AppColors {
-  static const primary = Color(0xFF1F4FEA);
+  static const primary = Color(0xFF0052FF);
   static const primaryDark = Color(0xFF0B2A9E);
   static const accent = Color(0xFFFF6B3D);
   static const success = Color(0xFF16A34A);
@@ -23,7 +23,7 @@ abstract final class AppColors {
   static const borderDark = Color(0xFF262C3D);
 
   static const primaryGradient = LinearGradient(
-    colors: [Color(0xFF2E63FF), Color(0xFF1437C9)],
+    colors: [Color(0xFF1F66FF), Color(0xFF0046E0)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
