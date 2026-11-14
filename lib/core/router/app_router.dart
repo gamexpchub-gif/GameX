@@ -9,6 +9,7 @@ import '../../features/catalog/presentation/category_products_screen.dart';
 import '../../features/checkout/presentation/checkout_screen.dart';
 import '../../features/checkout/presentation/order_success_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
+import '../../features/live_review/presentation/live_review_screen.dart';
 import '../../features/orders/presentation/order_detail_screen.dart';
 import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/product/presentation/product_detail_screen.dart';
@@ -81,6 +82,10 @@ final appRouter = GoRouter(
           ProductDetailScreen(productId: s.pathParameters['id']!),
     ),
     GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
+    GoRoute(
+      path: '/live-review/:id',
+      builder: (_, s) => LiveReviewScreen(productId: s.pathParameters['id']!),
+    ),
     GoRoute(path: '/checkout', builder: (_, _) => const CheckoutScreen()),
     GoRoute(
       path: '/order-success/:id',

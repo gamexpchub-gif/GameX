@@ -633,13 +633,13 @@ class _YouMayLike extends ConsumerWidget {
           ),
         ),
         SizedBox(
-          height: kListingCardHeight * k,
+          height: listingCardHeight(300 * k),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: list.length,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (_, i) => SizedBox(
-              width: 253 * k,
+              width: 300 * k,
               child: ListingCard(product: list[i]),
             ),
           ),

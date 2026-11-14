@@ -200,10 +200,11 @@ class CategoriesScreen extends ConsumerWidget {
                           sliver: SliverGrid.builder(
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  mainAxisSpacing: 16 * k,
-                                  crossAxisSpacing: 16 * k,
-                                  mainAxisExtent: kListingCardHeight * k,
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 22 * k,
+                                  crossAxisSpacing: 20 * k,
+                                  // Two cards across: (852 - 2×30 - 20) / 2 design px wide.
+                                  mainAxisExtent: listingCardHeight(386 * k),
                                 ),
                             itemCount: items.length,
                             addRepaintBoundaries: false,

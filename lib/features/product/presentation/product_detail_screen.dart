@@ -278,7 +278,8 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(40 * d),
         child: SizedBox(
-          height: 452 * d,
+          // Square gallery (equal sides).
+          height: 849 * d,
           child: Stack(
             children: [
               Positioned.fill(
@@ -350,6 +351,30 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                     ),
                   ),
                 ),
+              Positioned(
+                left: 19 * d,
+                top: 84 * d,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HeroTag(
+                      d: d,
+                      icon: Icons.diamond_outlined,
+                      text:
+                          '${(p.condition ?? 'Excellent').replaceAll(' Condition', '')} Condition${p.batteryHealth > 0 ? '  •  🔋 ${p.batteryHealth}%' : ''}',
+                      onTap: () => showConditionReport(context, p),
+                    ),
+                    SizedBox(height: 12 * d),
+                    _HeroTag(
+                      d: d,
+                      live: true,
+                      icon: Icons.videocam_rounded,
+                      text: 'LIVE View',
+                      onTap: () => context.push('/live-review/${p.id}'),
+                    ),
+                  ],
+                ),
+              ),
               Positioned(
                 right: 17 * d,
                 top: 15 * d,
@@ -486,8 +511,8 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
         ...r.media.where((m) => m.isVideo),
     ];
     Widget frame(bool sel, Widget child) => Container(
-      width: 200 * d,
-      height: 132 * d,
+      width: 150 * d,
+      height: 150 * d,
       padding: EdgeInsets.all(4 * d),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20 * d),
@@ -503,7 +528,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
       ),
     );
     return SizedBox(
-      height: 132 * d,
+      height: 150 * d,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: 19 * d),
@@ -1432,6 +1457,75 @@ class _Header extends ConsumerWidget {
             () => showProductMenu(context, product),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small pill on the gallery (condition / LIVE View).
+class _HeroTag extends StatelessWidget {
+  const _HeroTag({
+    required this.d,
+    required this.icon,
+    required this.text,
+    required this.onTap,
+    this.live = false,
+  });
+  final double d;
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 46 * d,
+        padding: EdgeInsets.symmetric(horizontal: 16 * d),
+        decoration: BoxDecoration(
+          color: live
+              ? const Color(0xFFE5283B)
+              : const Color(0xFF14183A).withValues(alpha: 0.78),
+          borderRadius: BorderRadius.circular(23 * d),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: live ? 0.6 : 0.25),
+          ),
+          boxShadow: live
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFE5283B).withValues(alpha: 0.45),
+                    blurRadius: 14 * d,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (live)
+              Container(
+                width: 12 * d,
+                height: 12 * d,
+                margin: EdgeInsets.only(right: 8 * d),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            Icon(icon, size: 26 * d, color: Colors.white),
+            SizedBox(width: 8 * d),
+            Text(
+              text,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18 * d,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -17,6 +17,7 @@ import '../../../checkout/providers/address_provider.dart';
 import '../../../home/presentation/widgets/design_scale.dart' show HomeColors;
 import '../../../home/presentation/widgets/home_sheets.dart';
 import '../../../reviews/providers/reviews_provider.dart';
+import '../../../live_review/providers/live_review_provider.dart';
 import 'pdp_sheets.dart';
 import 'review_widgets.dart';
 
@@ -129,6 +130,10 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _conditionCard(),
+        _gap,
+        _liveCard(),
+        _gap,
         _deliverTo(),
         SizedBox(height: 14 * d),
         _freeDelivery(),
@@ -155,6 +160,276 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         SizedBox(height: 34 * d),
         _trust(),
       ],
+    );
+  }
+
+  // ── Condition ──
+  Widget _conditionCard() {
+    final grade = (p.condition ?? 'Excellent').replaceAll(' Condition', '');
+    const grades = ['Good', 'Excellent', 'Like New'];
+    final gi = grades.indexOf(grade).clamp(0, 2);
+    final battery = p.batteryHealth == 0 ? 90 : p.batteryHealth;
+    final rows = [
+      (
+        Icons.smartphone_rounded,
+        'Screen',
+        gi == 0 ? 'Flawless, no dead pixels' : 'Flawless, like new',
+      ),
+      (
+        Icons.crop_square_rounded,
+        'Body',
+        switch (gi) {
+          2 => 'No visible marks',
+          1 => 'Micro-scratches, invisible at arm\'s length',
+          _ => 'Light visible wear on frame',
+        },
+      ),
+      (
+        Icons.battery_charging_full_rounded,
+        'Battery health',
+        '$battery% of original capacity',
+      ),
+      (Icons.check_circle_outline_rounded, 'Functions', 'All 52 checks passed'),
+    ];
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.diamond_outlined,
+                size: 38 * d,
+                color: HomeColors.blue,
+              ),
+              SizedBox(width: 16 * d),
+              Expanded(child: Text('Condition', style: _h)),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 18 * d,
+                  vertical: 8 * d,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1F66FF), Color(0xFF6A3DF5)],
+                  ),
+                  borderRadius: BorderRadius.circular(20 * d),
+                ),
+                child: Text(
+                  grade,
+                  style: TextStyle(
+                    fontSize: 21 * d,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 22 * d),
+          Row(
+            children: [
+              for (var i = 0; i < grades.length; i++) ...[
+                if (i > 0) SizedBox(width: 10 * d),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 12 * d,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6 * d),
+                          color: i <= gi ? null : const Color(0xFFE6EBF7),
+                          gradient: i <= gi
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF1F66FF),
+                                    Color(0xFF6A3DF5),
+                                  ],
+                                )
+                              : null,
+                        ),
+                      ),
+                      SizedBox(height: 8 * d),
+                      Text(
+                        grades[i],
+                        style: TextStyle(
+                          fontSize: 19 * d,
+                          fontWeight: i == gi
+                              ? FontWeight.w800
+                              : FontWeight.w500,
+                          color: i == gi ? HomeColors.ink : HomeColors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          SizedBox(height: 18 * d),
+          for (final r in rows)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 10 * d),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56 * d,
+                    height: 56 * d,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF3FF),
+                      borderRadius: BorderRadius.circular(16 * d),
+                    ),
+                    child: Icon(r.$1, size: 30 * d, color: HomeColors.blue),
+                  ),
+                  SizedBox(width: 18 * d),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.$2, style: _t.copyWith(fontSize: 22 * d)),
+                        Text(r.$3, style: _s),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 30 * d,
+                    color: HomeColors.green,
+                  ),
+                ],
+              ),
+            ),
+          SizedBox(height: 10 * d),
+          _wideButton(
+            'View Full Condition Report',
+            () => showConditionReport(context, p),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Live review ──
+  Widget _liveCard() {
+    final req = ref
+        .watch(liveRequestsProvider)
+        .where(
+          (r) => r.active && productKeyOf(r.productId) == productKeyOf(p.id),
+        )
+        .firstOrNull;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 19 * d),
+      child: GestureDetector(
+        onTap: () => context.push('/live-review/${p.id}'),
+        child: Container(
+          padding: EdgeInsets.all(30 * d),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(32 * d),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0E1033), Color(0xFF2A1466), Color(0xFF5B1E8F)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 14 * d,
+                      vertical: 6 * d,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5283B),
+                      borderRadius: BorderRadius.circular(10 * d),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 11 * d,
+                          height: 11 * d,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        SizedBox(width: 8 * d),
+                        Text(
+                          'LIVE REVIEW',
+                          style: TextStyle(
+                            fontSize: 17 * d,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Free • 10 min',
+                    style: TextStyle(fontSize: 19 * d, color: Colors.white70),
+                  ),
+                ],
+              ),
+              SizedBox(height: 18 * d),
+              Text(
+                'See this exact phone live',
+                style: TextStyle(
+                  fontSize: 34 * d,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 8 * d),
+              Text(
+                'A GAMEX expert shows you this unit on a video call — IMEI, battery health, screen and every scratch — before you buy.',
+                style: TextStyle(
+                  fontSize: 21 * d,
+                  height: 1.4,
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+              ),
+              SizedBox(height: 22 * d),
+              Container(
+                height: 70 * d,
+                decoration: BoxDecoration(
+                  color: req == null ? Colors.white : const Color(0xFF22C55E),
+                  borderRadius: BorderRadius.circular(35 * d),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      req == null
+                          ? Icons.videocam_rounded
+                          : Icons.event_available_rounded,
+                      size: 32 * d,
+                      color: req == null
+                          ? const Color(0xFFE5283B)
+                          : Colors.white,
+                    ),
+                    SizedBox(width: 12 * d),
+                    Text(
+                      req == null
+                          ? 'Request Live View'
+                          : 'Scheduled • ${DateFormat('EEE d MMM, h:mm a').format(req.slot)}',
+                      style: TextStyle(
+                        fontSize: 22 * d,
+                        fontWeight: FontWeight.w800,
+                        color: req == null ? HomeColors.ink : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
