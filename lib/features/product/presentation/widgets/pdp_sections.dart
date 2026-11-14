@@ -223,8 +223,10 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
   }
 
   Widget _freeDelivery() {
-    final city = ref.watch(addressBookProvider).current?.city ?? 'Dhaka';
-    final eta = DateTime.now().add(Duration(days: city == 'Dhaka' ? 2 : 4));
+    final city = ref.watch(addressBookProvider).current?.city ?? 'Mumbai';
+    final eta = DateTime.now().add(
+      Duration(days: kMetroCities.contains(city) ? 2 : 4),
+    );
     final free = widget.price >= CartSummary.freeDeliveryThreshold;
     return _card(
       padding: EdgeInsets.symmetric(horizontal: 28 * d, vertical: 20 * d),
@@ -653,7 +655,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         'Battery health',
         '${p.batteryHealth == 0 ? 90 : p.batteryHealth}%',
       ),
-      (Icons.qr_code_2_rounded, 'IMEI status', 'Clean • BTRC registered'),
+      (Icons.qr_code_2_rounded, 'IMEI status', 'Clean • Blacklist-free'),
       (Icons.gpp_good_outlined, 'Warranty', '${p.warrantyMonths} months GAMEX'),
     ];
     final shown = _specsOpen ? [...rows, ...extra] : rows;

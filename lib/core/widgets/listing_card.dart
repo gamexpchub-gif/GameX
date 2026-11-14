@@ -54,9 +54,11 @@ class ListingCard extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () => context.push('/product/${p.id}'),
+      // No blurred shadow: hundreds of these scroll by in the feed.
       child: Glass(
         radius: 22 * k,
-        color: Colors.white.withValues(alpha: 0.88),
+        shadow: false,
+        color: Colors.white.withValues(alpha: 0.92),
         padding: EdgeInsets.all(9 * k),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

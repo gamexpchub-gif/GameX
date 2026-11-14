@@ -77,7 +77,7 @@ void main() {
     final welcome = couponByCode('WELCOME20')!;
     expect(couponDiscount(welcome, 10000), 0); // below minimum
     expect(couponDiscount(welcome, 100000), 8000); // capped
-    expect(couponDiscount(couponByCode('BKASH500')!, 20000), 500);
+    expect(couponDiscount(couponByCode('UPI500')!, 20000), 500);
   });
 
   test('card validation', () {

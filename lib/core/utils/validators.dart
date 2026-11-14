@@ -1,8 +1,8 @@
 abstract final class Validators {
   static final _emailRe = RegExp(r'^[\w.+-]+@[\w-]+\.[\w.-]+$');
 
-  /// Bangladeshi mobile number: 01XXXXXXXXX (optionally +88 prefix).
-  static final _bdPhoneRe = RegExp(r'^(?:\+?88)?01[3-9]\d{8}$');
+  /// Indian mobile number: 10 digits starting 6-9 (optional +91 / 0 prefix).
+  static final _bdPhoneRe = RegExp(r'^(?:\+?91|0)?[6-9]\d{9}$');
 
   static String? required(String? v, [String field = 'This field']) =>
       (v == null || v.trim().isEmpty) ? '$field is required' : null;
@@ -22,7 +22,7 @@ abstract final class Validators {
     final cleaned = v.replaceAll(RegExp(r'[\s-]'), '');
     return _bdPhoneRe.hasMatch(cleaned)
         ? null
-        : 'Enter a valid number (01XXXXXXXXX)';
+        : 'Enter a valid 10-digit mobile number';
   }
 
   /// Card number with Luhn checksum (13–19 digits).

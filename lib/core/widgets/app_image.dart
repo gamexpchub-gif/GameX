@@ -24,12 +24,21 @@ class AppImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url.startsWith('asset:')) {
-      final img = Image.asset(
-        url.substring(6),
-        fit: BoxFit.contain,
-        width: width,
-        height: height,
-        filterQuality: FilterQuality.medium,
+      // Decode at (roughly) the displayed size instead of full resolution.
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final img = LayoutBuilder(
+        builder: (context, c) {
+          final w = width ?? (c.maxWidth.isFinite ? c.maxWidth : null);
+          return Image.asset(
+            url.substring(6),
+            fit: BoxFit.contain,
+            width: width,
+            height: height,
+            cacheWidth: w == null ? null : (w * dpr).round().clamp(64, 1200),
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+          );
+        },
       );
       // Product photos sit on the same soft panel colour they were shot on.
       final boxed = Container(

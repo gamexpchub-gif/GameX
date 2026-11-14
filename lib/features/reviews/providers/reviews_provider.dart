@@ -187,7 +187,7 @@ const _texts = [
   (
     3,
     'Okay, slow delivery',
-    'Phone is fine but delivery took three days to Sylhet. Condition matches the description.',
+    'Phone is fine but delivery took three days to Pune. Condition matches the description.',
   ),
 ];
 
@@ -224,9 +224,9 @@ List<Question> _demoQuestions(String key) => [
     id: '$key-q1',
     productKey: key,
     author: 'Arif',
-    text: 'Is the phone PTA/BTRC approved and network unlocked?',
+    text: 'Is the phone network unlocked?',
     createdAt: DateTime(2026, 11, 2),
-    answer: 'Yes. Every GAMEX phone is BTRC registered, IMEI verified and works on all Bangladeshi operators.',
+    answer: 'Yes. Every GAMEX phone is IMEI verified, blacklist-free and works on Jio, Airtel, Vi and BSNL.',
   ),
   Question(
     id: '$key-q2',

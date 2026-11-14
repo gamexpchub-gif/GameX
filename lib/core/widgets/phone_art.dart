@@ -92,9 +92,7 @@ class PhoneBackPainter extends CustomPainter {
     );
     canvas.drawRRect(
       bump.shift(Offset(0, w * 0.012)),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.25)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.02),
+      Paint()..color = Colors.black.withValues(alpha: 0.25),
     );
     canvas.drawRRect(
       bump,
@@ -233,8 +231,7 @@ class PhoneFrontPainter extends CustomPainter {
               _shade(c2, 0.25).withValues(alpha: 0.55),
               Colors.white.withValues(alpha: 0.05),
             ],
-          ).createShader(rect)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.015),
+          ).createShader(rect),
       );
     }
     canvas.restore();

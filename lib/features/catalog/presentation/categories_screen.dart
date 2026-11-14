@@ -109,7 +109,6 @@ class CategoriesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final k = context.k;
     final mq = MediaQuery.of(context);
-    final listings = ref.watch(listingsProvider);
 
     Widget box(Widget child) => SliverToBoxAdapter(child: child);
     Widget gap(double h) => SliverToBoxAdapter(child: SizedBox(height: h * k));
@@ -126,7 +125,9 @@ class CategoriesScreen extends ConsumerWidget {
             child: NotificationListener<ScrollNotification>(
               // Endless feed: fetch the next page ~1.5 screens before the end.
               onNotification: (n) {
-                if (n.metrics.extentAfter < mq.size.height * 1.5) {
+                if (n is ScrollUpdateNotification &&
+                    n.metrics.extentAfter < mq.size.height * 1.5 &&
+                    !ref.read(listingsProvider).loading) {
                   ref.read(listingsProvider.notifier).loadMore();
                 }
                 return false;
@@ -188,26 +189,41 @@ class CategoriesScreen extends ConsumerWidget {
                       ),
                     ),
                     gap(20),
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(horizontal: 30 * k),
-                      sliver: SliverGrid.builder(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 16 * k,
-                          crossAxisSpacing: 16 * k,
-                          mainAxisExtent: kListingCardHeight * k,
-                        ),
-                        itemCount: listings.items.length,
-                        itemBuilder: (_, i) => RepaintBoundary(
-                          child: ListingCard(product: listings.items[i]),
-                        ),
-                      ),
+                    // Only the feed rebuilds when a new page arrives.
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final items = ref.watch(
+                          listingsProvider.select((s) => s.items),
+                        );
+                        return SliverPadding(
+                          padding: EdgeInsets.symmetric(horizontal: 30 * k),
+                          sliver: SliverGrid.builder(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  mainAxisSpacing: 16 * k,
+                                  crossAxisSpacing: 16 * k,
+                                  mainAxisExtent: kListingCardHeight * k,
+                                ),
+                            itemCount: items.length,
+                            addRepaintBoundaries: false,
+                            itemBuilder: (_, i) => RepaintBoundary(
+                              child: ListingCard(
+                                key: ValueKey(items[i].id),
+                                product: items[i],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    box(
-                      _FeedFooter(
-                        state: listings,
-                        onRetry: () =>
-                            ref.read(listingsProvider.notifier).loadMore(),
+                    Consumer(
+                      builder: (context, ref, _) => box(
+                        _FeedFooter(
+                          state: ref.watch(listingsProvider),
+                          onRetry: () =>
+                              ref.read(listingsProvider.notifier).loadMore(),
+                        ),
                       ),
                     ),
                     gap(mq.padding.bottom / k + 20),

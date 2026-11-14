@@ -129,9 +129,9 @@ const coupons = <Coupon>[
     maxDiscount: 8000,
   ),
   Coupon(
-    'BKASH500',
+    'UPI500',
     0,
-    'Flat ৳500 off with bKash',
+    'Flat ₹500 off with UPI',
     minOrder: 15000,
     maxDiscount: 500,
   ),
@@ -140,7 +140,7 @@ const coupons = <Coupon>[
 const promoCodes = <String, double>{
   'GAMEX10': 0.10,
   'WELCOME20': 0.20,
-  'BKASH500': 0,
+  'UPI500': 0,
 };
 
 Coupon? couponByCode(String? code) {

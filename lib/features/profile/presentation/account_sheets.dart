@@ -265,7 +265,8 @@ class _SettingsState extends ConsumerState<_Settings> {
           leading: const Icon(Icons.language_rounded),
           title: const Text('Language'),
           trailing: const Text('English'),
-          onTap: () => showAppSnack(context, 'বাংলা support is coming soon'),
+          onTap: () =>
+              showAppSnack(context, 'Hindi & regional languages coming soon'),
         ),
       ],
     );
@@ -413,7 +414,7 @@ void showRewardsSheet(BuildContext context, int points) {
         ),
         const SizedBox(height: 6),
         for (final t in const [
-          (Icons.shopping_bag_outlined, '1 point for every ৳100 you spend'),
+          (Icons.shopping_bag_outlined, '1 point for every ₹100 you spend'),
           (Icons.rate_review_outlined, '50 points for a review with photos'),
           (Icons.group_add_outlined, '500 points for every friend you refer'),
           (Icons.sync_rounded, '200 points when you trade in a phone'),
@@ -525,8 +526,8 @@ void showPaymentMethodsSheet(BuildContext context) => _sheet(
           ),
           subtitle: Text(switch (m) {
             PaymentMethod.cashOnDelivery => 'Pay when the phone arrives',
-            PaymentMethod.bkash => 'Instant wallet payment',
-            PaymentMethod.nagad => 'Instant wallet payment',
+            PaymentMethod.bkash => 'Google Pay, PhonePe, Paytm & more',
+            PaymentMethod.nagad => 'Paytm, Amazon Pay & Mobikwik',
             PaymentMethod.card => 'Visa, Mastercard, Amex • EMI',
           }),
           trailing: const Icon(
@@ -606,7 +607,7 @@ void showHelpSheet(BuildContext context) => _sheet(
     children: [
       _title('Help & Support', 'We are here 24×7'),
       for (final h in const [
-        (Icons.call_outlined, 'Call us', '16XXX (24×7)'),
+        (Icons.call_outlined, 'Call us', '1800-123-4567 (24×7)'),
         (Icons.chat_outlined, 'WhatsApp chat', 'Replies in under 5 minutes'),
         (Icons.mail_outline_rounded, 'Email', 'support@gamex.shop'),
         (Icons.help_outline_rounded, 'FAQs', 'Orders, returns, warranty, EMI'),

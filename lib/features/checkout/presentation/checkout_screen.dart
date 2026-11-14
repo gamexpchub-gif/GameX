@@ -60,7 +60,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
-  bool _expressAvailable(Address? a) => a?.city == 'Dhaka';
+  bool _expressAvailable(Address? a) => kMetroCities.contains(a?.city);
 
   double _deliveryFee(CartSummary s, Address? a) =>
       _delivery == _Delivery.express && _expressAvailable(a)
@@ -365,8 +365,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   // ── Delivery speed ──
   Widget _deliveryCard(CartSummary s, Address? a) {
     final now = DateTime.now();
-    final std = DateFormat('EEE, d MMM')
-        .format(now.add(Duration(days: a?.city == 'Dhaka' ? 2 : 4)));
+    final std = DateFormat(
+      'EEE, d MMM',
+    ).format(now.add(Duration(days: kMetroCities.contains(a?.city) ? 2 : 4)));
     final exp = DateFormat('EEE, d MMM')
         .format(now.add(const Duration(days: 1)));
     final express = _expressAvailable(a);
@@ -402,8 +403,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               leading: const Icon(Icons.bolt_rounded, color: AppColors.warning),
               title: 'Express delivery',
               subtitle: express
-                  ? 'Tomorrow, $exp • Dhaka only'
-                  : 'Available in Dhaka only',
+                  ? 'Tomorrow, $exp • Metro cities'
+                  : 'Available in metro cities only',
               trailing: '+${formatPrice(_expressFee)}',
             ),
           ),
@@ -500,8 +501,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final theme = Theme.of(context);
     const subtitles = {
       PaymentMethod.cashOnDelivery: 'Pay in cash when the phone arrives',
-      PaymentMethod.bkash: 'Pay instantly from your bKash wallet',
-      PaymentMethod.nagad: 'Pay instantly from your Nagad wallet',
+      PaymentMethod.bkash: 'Google Pay, PhonePe, Paytm & any UPI app',
+      PaymentMethod.nagad: 'Paytm, Amazon Pay, Mobikwik wallets',
       PaymentMethod.card: 'Visa, Mastercard, Amex • EMI available',
     };
     return SectionCard(
@@ -559,14 +560,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           style: const TextStyle(fontSize: 12.5, height: 1.4),
         );
       case PaymentMethod.bkash:
+        return TextFormField(
+          controller: _wallet,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'UPI ID',
+            hintText: 'yourname@okaxis',
+            prefixIcon: Icon(Icons.qr_code_2_rounded),
+            isDense: true,
+          ),
+          validator: (v) =>
+              RegExp(r'^[\w.\-]{2,}@[a-zA-Z]{2,}$').hasMatch((v ?? '').trim())
+              ? null
+              : 'Enter a valid UPI ID',
+        );
       case PaymentMethod.nagad:
         return TextFormField(
           controller: _wallet,
           keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: '${m.label} account number',
-            hintText: '01XXXXXXXXX',
-            prefixIcon: const Icon(Icons.phone_android_rounded),
+          decoration: const InputDecoration(
+            labelText: 'Wallet mobile number',
+            hintText: '98765 43210',
+            prefixIcon: Icon(Icons.phone_android_rounded),
             isDense: true,
           ),
           validator: Validators.phone,

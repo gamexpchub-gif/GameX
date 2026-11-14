@@ -25,7 +25,7 @@ const _ink = Color(0xFF0B1230);
 const _muted = Color(0xFF4A5372);
 const _purple = Color(0xFF6A3DF5);
 
-/// Reward points: 1 point per ৳100 spent.
+/// Reward points: 1 point per ₹100 spent.
 int rewardPoints(List<Order> orders) =>
     orders.fold(0.0, (s, o) => s + o.total) ~/ 100;
 
@@ -87,7 +87,7 @@ class ProfileScreen extends ConsumerWidget {
                 gap(18),
                 Center(
                   child: Text(
-                    'GAMEX v1.0.0 • Made with ♥ in Bangladesh',
+                    'GAMEX v1.0.0 • Made with ♥ in India',
                     style: TextStyle(
                       fontSize: 19 * d,
                       color: const Color(0xFF8C95B0),
@@ -1015,7 +1015,7 @@ class _MenuGrid extends ConsumerWidget {
       (
         Icons.credit_card_rounded,
         'Payment Methods',
-        'bKash, Nagad, Cards & COD',
+        'UPI, Cards & Wallets',
         () => showPaymentMethodsSheet(context),
       ),
       (

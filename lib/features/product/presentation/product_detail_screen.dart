@@ -1047,7 +1047,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                     2 => showTradeInSheet(context),
                     _ => showAppSnack(
                       context,
-                      'Free delivery on orders above ৳5,000',
+                      'Free delivery on orders above ₹5,000',
                     ),
                   },
                   child: Column(

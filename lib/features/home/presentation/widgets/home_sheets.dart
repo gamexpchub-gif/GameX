@@ -118,7 +118,7 @@ void showNotificationsSheet(BuildContext context) {
     (
       Icons.sync_rounded,
       'Trade-in bonus',
-      'Get extra ৳2,000 when you exchange this week.',
+      'Get extra ₹2,000 when you exchange this week.',
     ),
     (
       Icons.verified_user_rounded,

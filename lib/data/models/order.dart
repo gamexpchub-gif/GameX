@@ -2,8 +2,8 @@ import 'cart_item.dart';
 
 enum PaymentMethod {
   cashOnDelivery('Cash on Delivery'),
-  bkash('bKash'),
-  nagad('Nagad'),
+  bkash('UPI'),
+  nagad('Wallets'),
   card('Debit / Credit Card');
 
   const PaymentMethod(this.label);

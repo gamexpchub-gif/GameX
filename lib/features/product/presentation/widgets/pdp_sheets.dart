@@ -190,7 +190,7 @@ void showProductMenu(BuildContext context, Product p) {
             title: const Text('Ask GAMEX support'),
             onTap: () {
               Navigator.pop(c);
-              showAppSnack(context, 'Support: 16XXX (9am – 10pm)');
+              showAppSnack(context, 'Support: 1800-123-4567 (9am – 10pm)');
             },
           ),
           ListTile(
@@ -511,7 +511,7 @@ void showConditionReport(BuildContext context, Product p) {
     'Battery': battery / 100,
   };
   const checks = [
-    'IMEI verified & BTRC registered',
+    'IMEI verified & blacklist-free',
     'Original display & parts',
     'Face ID / fingerprint working',
     'Network unlocked',

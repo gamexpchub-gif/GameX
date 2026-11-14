@@ -8,15 +8,27 @@ import '../../../auth/providers/auth_provider.dart';
 import '../../providers/address_provider.dart';
 
 const kDivisions = [
-  'Dhaka',
-  'Chattogram',
-  'Sylhet',
-  'Rajshahi',
-  'Khulna',
-  'Barishal',
-  'Rangpur',
-  'Mymensingh',
+  'Mumbai',
+  'Delhi',
+  'Bengaluru',
+  'Kolkata',
+  'Chennai',
+  'Hyderabad',
+  'Pune',
+  'Ahmedabad',
+  'Jaipur',
+  'Lucknow',
 ];
+
+/// Cities with next-day express delivery.
+const kMetroCities = {
+  'Mumbai',
+  'Delhi',
+  'Bengaluru',
+  'Kolkata',
+  'Chennai',
+  'Hyderabad',
+};
 
 IconData addressIcon(String label) => switch (label) {
   'Office' => Icons.work_outline_rounded,
@@ -224,7 +236,7 @@ class _AddressFormState extends ConsumerState<_AddressForm> {
   late final TextEditingController _phone;
   late final TextEditingController _area;
   late final TextEditingController _details;
-  String _city = 'Dhaka';
+  String _city = 'Mumbai';
   String _label = 'Home';
 
   @override
@@ -240,7 +252,7 @@ class _AddressFormState extends ConsumerState<_AddressForm> {
     _area = TextEditingController(text: existing?.area ?? '');
     _details = TextEditingController(text: existing?.details ?? '');
     if (existing != null) {
-      _city = kDivisions.contains(existing.city) ? existing.city : 'Dhaka';
+      _city = kDivisions.contains(existing.city) ? existing.city : 'Mumbai';
       _label = existing.label;
     }
   }
@@ -325,7 +337,7 @@ class _AddressFormState extends ConsumerState<_AddressForm> {
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
                   labelText: 'Mobile number',
-                  hintText: '01XXXXXXXXX',
+                  hintText: '98765 43210',
                   prefixIcon: Icon(Icons.phone_outlined),
                 ),
                 validator: Validators.phone,
@@ -334,7 +346,7 @@ class _AddressFormState extends ConsumerState<_AddressForm> {
               DropdownButtonFormField<String>(
                 initialValue: _city,
                 decoration: const InputDecoration(
-                  labelText: 'Division / City',
+                  labelText: 'City',
                   prefixIcon: Icon(Icons.map_outlined),
                 ),
                 items: [
@@ -348,8 +360,8 @@ class _AddressFormState extends ConsumerState<_AddressForm> {
                 controller: _area,
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
-                  labelText: 'Area / Thana',
-                  hintText: 'e.g. Dhanmondi',
+                  labelText: 'Area / Locality',
+                  hintText: 'e.g. Andheri West',
                   prefixIcon: Icon(Icons.location_city_outlined),
                 ),
                 validator: (v) => Validators.required(v, 'Area'),

@@ -33,21 +33,21 @@ class PaymentMark extends StatelessWidget {
         );
       case PaymentMethod.bkash:
         return box(
-          const Color(0xFFE2136E),
+          const Color(0xFF0F7A3B),
           Text(
-            'bKash',
+            'UPI',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
-              fontSize: size * 0.27,
+              fontSize: size * 0.32,
             ),
           ),
         );
       case PaymentMethod.nagad:
         return box(
-          const Color(0xFFF26522),
+          const Color(0xFF5F259F),
           Text(
-            'Nagad',
+            'Wallet',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
