@@ -652,5 +652,5 @@ app.listen(PORT, HOST, () => {
   console.log(`\n  GAMEX server running on port ${PORT}`);
   console.log(`  Admin panel:   http://localhost:${PORT}${ADMIN_BASE}/dashboard`);
   ips.forEach((ip) => console.log(`  Phones (Wi-Fi): http://${ip}:${PORT}`));
-  console.log(`  Admin login:   ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}\n`);
+  console.log(`  Admin login:   ${ADMIN_EMAIL}${process.env.ADMIN_PASSWORD ? " (password from env)" : " / " + ADMIN_PASSWORD}\n`);
 });
