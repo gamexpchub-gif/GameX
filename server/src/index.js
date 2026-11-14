@@ -58,8 +58,11 @@ app.set('trust proxy', 'loopback');
 app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use('/img', express.static(path.join(ROOT, 'public', 'img'), { maxAge: '7d' }));
-app.use('/uploads', express.static(UPLOADS, { maxAge: '30d' }));
+// Everything is reachable both at / and under ADMIN_BASE (e.g. /hisab/api),
+// so GAMEX can share a domain with another site that owns the root.
+const site = express.Router();
+site.use('/img', express.static(path.join(ROOT, 'public', 'img'), { maxAge: '7d' }));
+site.use('/uploads', express.static(UPLOADS, { maxAge: '30d' }));
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -71,7 +74,9 @@ const upload = multer({
 });
 
 const api = express.Router();
-app.use('/api', api);
+site.use('/api', api);
+app.use(ADMIN_BASE, site);
+app.use(site);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
 
 api.get('/health', (_, res) => res.json({ ok: true, time: now(), listings: db.listings.length }));

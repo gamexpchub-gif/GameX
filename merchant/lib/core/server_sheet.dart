@@ -70,7 +70,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Default: https://admin.deencircle.online — for a local test server use its Wi-Fi address, e.g. http://192.168.1.5:8080',
+            'Default: https://admin.deencircle.online/hisab — for a local test server use its Wi-Fi address, e.g. http://192.168.1.5:8080',
             style: TextStyle(color: C.muted, height: 1.4),
           ),
           const SizedBox(height: 14),

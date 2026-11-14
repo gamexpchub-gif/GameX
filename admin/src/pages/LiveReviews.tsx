@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalendarClock, CheckCircle2, MessageCircle, PhoneCall, Store, Video, XCircle } from 'lucide-react';
-import { LiveCall, LiveStage, act, fmtDateTime, useDB } from '../store';
+import { LiveCall, LiveStage, act, fmtDateTime, useDB, media } from '../store';
 import { Badge, Button, Card, Empty, PageHeader, SearchInput, Tabs, cx, toast } from '../ui';
 import { liveLabel, liveTone } from '../status';
 
@@ -74,7 +74,7 @@ export default function LiveReviews() {
             return (
               <Card key={l.id}>
                 <div className="flex items-start gap-3">
-                  <img src={l.photo} alt="" className="h-16 w-16 rounded-xl bg-gradient-to-br from-slate-50 to-blue-50 object-contain p-1" />
+                  <img src={media(l.photo)} alt="" className="h-16 w-16 rounded-xl bg-gradient-to-br from-slate-50 to-blue-50 object-contain p-1" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-bold text-ink">{l.item}</p>
                     <p className="text-sm text-muted">

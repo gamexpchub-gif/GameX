@@ -14,7 +14,7 @@ import {
   Store,
   XCircle,
 } from 'lucide-react';
-import { Listing, act, ago, fmtDateTime, gradeLabel, inr, title, useDB, validImei } from '../store';
+import { Listing, act, ago, fmtDateTime, gradeLabel, inr, title, useDB, validImei, media } from '../store';
 import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, cx, inputCls, toast } from '../ui';
 import { listingLabel, listingTone, sellerLabel, sellerTone } from '../status';
 
@@ -109,7 +109,7 @@ export default function QcQueue() {
                 <div onClick={() => setOpenId(l.id)} className="p-4">
                   <div className="flex gap-4">
                     <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50">
-                      {l.photos[0] ? <img src={l.photos[0]} alt="" className="h-full w-full object-contain p-2" /> : <ImageOff className="m-auto mt-10 text-slate-300" />}
+                      {l.photos[0] ? <img src={media(l.photos[0])} alt="" className="h-full w-full object-contain p-2" /> : <ImageOff className="m-auto mt-10 text-slate-300" />}
                       <span className="absolute bottom-1.5 left-1.5 rounded-md bg-ink/80 px-1.5 py-0.5 text-[10px] font-bold text-white">{l.photos.length} photos</span>
                     </div>
                     <div className="min-w-0 flex-1">
@@ -231,7 +231,7 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
           <div className="grid h-72 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50">
-            {l.photos[photo] ? <img src={l.photos[photo]} alt="" className="h-full w-full object-contain p-4" /> : <ImageOff className="text-slate-300" size={40} />}
+            {l.photos[photo] ? <img src={media(l.photos[photo])} alt="" className="h-full w-full object-contain p-4" /> : <ImageOff className="text-slate-300" size={40} />}
           </div>
           <div className="space-y-2">
             <p className="text-2xl font-extrabold text-ink">{inr(l.price)}</p>
@@ -252,7 +252,7 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
         <div className="flex gap-2 overflow-x-auto">
           {l.photos.map((p, i) => (
             <button key={p + i} onClick={() => setPhoto(i)} className={cx('h-16 w-16 shrink-0 rounded-xl border-2 bg-slate-50 p-1', i === photo ? 'border-brand' : 'border-transparent')}>
-              <img src={p} alt="" className="h-full w-full object-contain" />
+              <img src={media(p)} alt="" className="h-full w-full object-contain" />
             </button>
           ))}
         </div>
@@ -347,7 +347,7 @@ export function Certificate({ listing: l, seller, onClose }: { listing: Listing;
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div id="cert" className="rounded-2xl border-2 border-ink p-5">
           <div className="flex items-center justify-between">
-            <img src="/img/logo_gamex.png" alt="GAMEX" className="h-6" />
+            <img src={media('/img/logo_gamex.png')} alt="GAMEX" className="h-6" />
             <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">QC Passed</span>
           </div>
           <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-muted">Certificate of inspection</p>

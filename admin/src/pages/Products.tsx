@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Download, Eye, Package, QrCode } from 'lucide-react';
-import { Listing, ListingStatus, act, fmtDate, gradeLabel, inr, title, useDB } from '../store';
+import { Listing, ListingStatus, act, fmtDate, gradeLabel, inr, title, useDB, media } from '../store';
 import { Badge, Button, Card, Empty, PageHeader, SearchInput, Tabs, Td, Th, Toggle, cx, inputCls, toast } from '../ui';
 import { listingLabel, listingTone } from '../status';
 import { Certificate } from './QcQueue';
@@ -103,7 +103,7 @@ export default function Products() {
                   <tr key={l.id} className="hover:bg-slate-50/60">
                     <Td>
                       <div className="flex items-center gap-3">
-                        <img src={l.photos[0]} alt="" className="h-12 w-12 rounded-xl bg-slate-50 object-contain" />
+                        <img src={media(l.photos[0])} alt="" className="h-12 w-12 rounded-xl bg-slate-50 object-contain" />
                         <div>
                           <p className="font-semibold">{title(l)}</p>
                           <p className="text-xs text-muted">

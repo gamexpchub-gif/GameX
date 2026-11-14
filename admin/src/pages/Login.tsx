@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lock, Mail, ShieldCheck } from 'lucide-react';
-import { login } from '../store';
+import { login, media } from '../store';
 import { Button, inputCls } from '../ui';
 
 export default function Login() {
@@ -30,7 +30,7 @@ export default function Login() {
         <div className="absolute -bottom-40 right-0 h-[520px] w-[520px] rounded-full bg-violet/50 blur-[120px]" />
         <div className="relative flex h-full flex-col justify-between p-14 text-white">
           <div className="inline-flex w-fit rounded-xl bg-white px-3 py-2">
-            <img src="/img/logo_gamex.png" alt="GAMEX" className="h-7" />
+            <img src={media('/img/logo_gamex.png')} alt="GAMEX" className="h-7" />
           </div>
           <div>
             <h1 className="max-w-md text-5xl font-extrabold leading-tight tracking-tight">Run the whole GAMEX marketplace from one place.</h1>

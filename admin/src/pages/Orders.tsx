@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, Download, MapPin, Phone, ShoppingBag, Store, Truck, XCircle } from 'lucide-react';
-import { Order, act, fmtDateTime, inr, useDB } from '../store';
+import { Order, act, fmtDateTime, inr, useDB, media } from '../store';
 import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, Td, Th, cx, inputCls, toast } from '../ui';
 import { nextAction, orderFlow, orderLabel, orderTone } from '../status';
 
@@ -129,7 +129,7 @@ export default function Orders() {
                       </Td>
                       <Td>
                         <div className="flex items-center gap-3">
-                          <img src={o.photo} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
+                          <img src={media(o.photo)} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
                           <span className="max-w-[200px] truncate">{o.item}</span>
                         </div>
                       </Td>
@@ -200,7 +200,7 @@ export default function Orders() {
         {open && (
           <div className="space-y-5">
             <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50 p-4">
-              <img src={open.photo} alt="" className="h-20 w-20 object-contain" />
+              <img src={media(open.photo)} alt="" className="h-20 w-20 object-contain" />
               <div className="flex-1">
                 <p className="font-bold text-ink">{open.item}</p>
                 <p className="text-sm text-muted">{open.variant}</p>

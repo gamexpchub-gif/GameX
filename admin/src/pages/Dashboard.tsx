@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowRight, IndianRupee, ShieldCheck, ShoppingBag, Store, Users } from 'lucide-react';
-import { ago, inr, inrShort, isRevenue, title, useDB } from '../store';
+import { ago, inr, inrShort, isRevenue, title, useDB, media } from '../store';
 import { Badge, Card, PageHeader, Stat, Tabs } from '../ui';
 import { orderLabel, orderTone } from '../status';
 
@@ -175,7 +175,7 @@ export default function Dashboard() {
           <div className="mt-3 divide-y divide-slate-100">
             {orders.slice(0, 6).map((o) => (
               <div key={o.id} className="flex items-center gap-4 px-5 py-3">
-                <img src={o.photo} alt="" className="h-11 w-11 rounded-xl bg-slate-50 object-contain" />
+                <img src={media(o.photo)} alt="" className="h-11 w-11 rounded-xl bg-slate-50 object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{o.item}</p>
                   <p className="text-xs text-muted">
@@ -232,7 +232,7 @@ export default function Dashboard() {
             {qc.length === 0 && <p className="py-8 text-center text-sm text-muted">Queue is clear 🎉</p>}
             {qc.slice(0, 4).map((l) => (
               <Link to="/qc" key={l.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 hover:bg-slate-50">
-                <img src={l.photos[0]} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
+                <img src={media(l.photos[0])} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{title(l)}</p>
                   <p className="text-xs text-muted">

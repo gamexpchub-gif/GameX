@@ -13,6 +13,6 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    proxy: { '/api': target, '/uploads': target, '/img': target },
+    proxy: { [base + 'api']: target, [base + 'uploads']: target },
   },
 });

@@ -21,7 +21,7 @@ class ApiException implements Exception {
 /// `--dart-define=API_URL=http://192.168.1.5:8080` for local testing.
 const kDefaultApi = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'https://admin.deencircle.online',
+  defaultValue: 'https://admin.deencircle.online/hisab',
 );
 const _kApiKey = 'api_url_v1';
 

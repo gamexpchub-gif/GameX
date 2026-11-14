@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Ban, BadgeCheck, Megaphone, Phone, Send, Store, Wallet } from 'lucide-react';
-import { Seller, act, ago, fmtDate, fmtDateTime, inr, inrShort, isRevenue, title, useDB } from '../store';
+import { Seller, act, ago, fmtDate, fmtDateTime, inr, inrShort, isRevenue, title, useDB, media } from '../store';
 import { Badge, Button, Card, Drawer, Empty, Field, PageHeader, SearchInput, Tabs, Td, Th, cx, inputCls, toast } from '../ui';
 import { listingLabel, listingTone, sellerLabel, sellerTone } from '../status';
 
@@ -307,7 +307,7 @@ function SellerDrawer({
           <div className="space-y-2">
             {listings.slice(0, 8).map((l) => (
               <div key={l.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-2">
-                <img src={l.photos[0]} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
+                <img src={media(l.photos[0])} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{title(l)}</p>
                   <p className="text-xs text-muted">

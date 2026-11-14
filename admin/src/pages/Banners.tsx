@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Edit3, Plus, Smartphone, Trash2 } from 'lucide-react';
-import { Banner, log, update, useDB } from '../store';
+import { Banner, log, update, useDB, media } from '../store';
 import { Badge, Button, Card, Drawer, Field, PageHeader, Toggle, cx, inputCls, toast } from '../ui';
 
 const presets = ['hero_banner', 'hero_banner_violet', 'hero_banner_teal', 'hero_banner_magenta'].map((n) => `/img/${n}.png`);
@@ -61,7 +61,7 @@ export default function Banners() {
                   <ArrowDown size={16} />
                 </button>
               </div>
-              <img src={b.image} alt="" className="h-28 w-full rounded-xl object-cover sm:w-64" />
+              <img src={media(b.image)} alt="" className="h-28 w-full rounded-xl object-cover sm:w-64" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-ink">{b.title}</p>
@@ -96,11 +96,11 @@ export default function Banners() {
           </p>
           <div className="mx-auto mt-4 w-[260px] rounded-[36px] border-[10px] border-ink bg-[#EEF2FC] p-3 shadow-2xl">
             <div className="mx-auto mb-3 h-4 w-20 rounded-full bg-ink" />
-            <img src="/img/logo_gamex.png" alt="" className="h-5" />
+            <img src={media('/img/logo_gamex.png')} alt="" className="h-5" />
             <div className="mt-2 h-7 rounded-full bg-white" />
             {shown ? (
               <div className="relative mt-3 overflow-hidden rounded-2xl">
-                <img src={shown.image} alt="" className="h-32 w-full object-cover" />
+                <img src={media(shown.image)} alt="" className="h-32 w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-r from-ink/70 to-transparent p-3 text-white">
                   <p className="max-w-[60%] text-[13px] font-extrabold leading-tight">{shown.title}</p>
                   <p className="mt-1 max-w-[60%] text-[9px] opacity-80">{shown.subtitle}</p>
@@ -142,7 +142,7 @@ export default function Banners() {
             <div className="grid grid-cols-2 gap-2">
               {presets.map((p) => (
                 <button key={p} onClick={() => set('image', p)} className={cx('overflow-hidden rounded-xl border-2', edit.image === p ? 'border-brand' : 'border-transparent')}>
-                  <img src={p} alt="" className="h-20 w-full object-cover" />
+                  <img src={media(p)} alt="" className="h-20 w-full object-cover" />
                 </button>
               ))}
             </div>

@@ -216,6 +216,12 @@ const EMPTY: DB = {
   },
 };
 
+// ---------- Paths ----------
+/** App base, e.g. "/hisab". API and media live under it too. */
+export const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+/** Server path ("/img/..", "/uploads/..") -> URL under the app base. */
+export const media = (p: string) => (p && p.startsWith('/') ? `${BASE}${p}` : p);
+
 // ---------- Session + live store ----------
 const TOKEN_KEY = 'gamex_admin_token';
 const readToken = () => {
@@ -252,7 +258,7 @@ export class ApiError extends Error {
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${BASE}/api${path}`, {
       method,
       headers: { 'content-type': 'application/json', ...(state.token ? { authorization: `Bearer ${state.token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),

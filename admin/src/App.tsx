@@ -16,7 +16,7 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import { ago, logout, refresh, useDB, useSession } from './store';
+import { ago, logout, refresh, useDB, useSession, media } from './store';
 import { cx } from './ui';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -65,7 +65,7 @@ function Shell() {
     <aside className="flex h-full w-[264px] flex-col bg-ink text-white">
       <div className="flex items-center gap-3 px-6 pb-6 pt-7">
         <div className="rounded-xl bg-white px-2.5 py-1.5">
-          <img src="/img/logo_gamex.png" alt="GAMEX" className="h-6" />
+          <img src={media('/img/logo_gamex.png')} alt="GAMEX" className="h-6" />
         </div>
         <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-blue-200">Super Admin</span>
       </div>

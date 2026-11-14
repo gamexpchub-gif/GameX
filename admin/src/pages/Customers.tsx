@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Ban, Crown, Mail, MapPin, Phone, Users } from 'lucide-react';
-import { act, ago, fmtDate, fmtDateTime, inr, isRevenue, useDB } from '../store';
+import { act, ago, fmtDate, fmtDateTime, inr, isRevenue, useDB, media } from '../store';
 import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, Td, Th, toast } from '../ui';
 import { orderLabel, orderTone } from '../status';
 
@@ -173,7 +173,7 @@ export default function Customers() {
                   .filter((o) => o.customerId === open.id)
                   .map((o) => (
                     <div key={o.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
-                      <img src={o.photo} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
+                      <img src={media(o.photo)} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{o.item}</p>
                         <p className="text-xs text-muted">

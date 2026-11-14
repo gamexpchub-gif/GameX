@@ -89,33 +89,78 @@ curl -fs http://127.0.0.1:8080/api/health >/dev/null || {
 }
 echo "GAMEX server is running (systemd service: gamex)"
 
-say "Configuring nginx for $DOMAIN"
-SITE=/etc/nginx/sites-available/gamex
-if [ ! -f "$SITE" ] || ! grep -q "managed by Certbot" "$SITE"; then
-  cat > "$SITE" <<EOF
+say "Configuring nginx: $DOMAIN/hisab -> GAMEX"
+# GAMEX (admin panel + API + photos) lives entirely under /hisab/.
+mkdir -p /etc/nginx/snippets
+cat > /etc/nginx/snippets/gamex-hisab.conf <<'NGINX'
+# GAMEX under /hisab/ - managed by deploy/remote-setup.sh
+location = /hisab { return 301 /hisab/; }
+location /hisab/ {
+    client_max_body_size 10m;
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+}
+NGINX
+
+DOMAIN_RE="$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')"
+NAME_RE="server_name[^;]*[[:space:]]${DOMAIN_RE}([[:space:]]|;)"
+
+# Is another site (e.g. your existing app) already serving this domain?
+EXISTING=()
+while IFS= read -r f; do
+  [ -n "$f" ] && [ "$f" != /etc/nginx/sites-available/gamex ] && EXISTING+=("$f")
+done < <(grep -rlE "$NAME_RE" /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/nginx.conf 2>/dev/null |
+  xargs -r -n1 readlink -f | sort -u)
+
+SHARED=no
+if [ "${#EXISTING[@]}" -gt 0 ]; then
+  SHARED=yes
+  echo "$DOMAIN is already served by: ${EXISTING[*]}"
+  echo "Adding GAMEX at /hisab/ to that config - your existing site keeps working."
+  rm -f /etc/nginx/sites-enabled/gamex /etc/nginx/sites-available/gamex
+  BACKUP="/root/nginx-backup-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$BACKUP"
+  for f in "${EXISTING[@]}"; do
+    cp -a "$f" "$BACKUP/"
+    grep -q 'snippets/gamex-hisab.conf' "$f" ||
+      sed -i --follow-symlinks -E "/${NAME_RE}/a\\    include snippets/gamex-hisab.conf;" "$f"
+  done
+  if ! nginx -t; then
+    warn "nginx rejected the change - restoring your original config from $BACKUP"
+    for f in "${EXISTING[@]}"; do cp -a "$BACKUP/$(basename "$f")" "$f"; done
+    nginx -t && systemctl reload nginx
+    exit 1
+  fi
+else
+  SITE=/etc/nginx/sites-available/gamex
+  if [ ! -f "$SITE" ] || ! grep -q "managed by Certbot" "$SITE"; then
+    cat > "$SITE" <<NGINX
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
-
-    client_max_body_size 10m;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 60s;
-    }
+    include snippets/gamex-hisab.conf;
+    location = / { return 302 /hisab/dashboard; }
 }
-EOF
+NGINX
+  fi
+  ln -sf "$SITE" /etc/nginx/sites-enabled/gamex
+  nginx -t
 fi
-ln -sf "$SITE" /etc/nginx/sites-enabled/gamex
-nginx -t
 systemctl enable nginx >/dev/null 2>&1
 systemctl reload nginx || systemctl restart nginx
+sleep 1
+if curl -fs -H "Host: $DOMAIN" http://127.0.0.1/hisab/api/health >/dev/null ||
+   curl -fsk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/hisab/api/health" >/dev/null; then
+  echo "nginx -> GAMEX OK"
+else
+  warn "nginx is not forwarding /hisab/ yet. Check with: nginx -T | grep -n hisab"
+fi
 
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
   ufw allow OpenSSH >/dev/null
@@ -130,6 +175,9 @@ if [ -z "$DNS_IP" ]; then
   warn "$DOMAIN does not resolve yet. Add a DNS A record: $DOMAIN -> this server's IP, then run deploy again."
 elif ! grep -qw "$DNS_IP" <<<"$MY_IPS"; then
   warn "$DOMAIN points to $DNS_IP, not this server ($MY_IPS). Fix the DNS A record, then run deploy again."
+elif [ "$SHARED" = yes ] && grep -qE 'listen[^;]*443' "${EXISTING[@]}"; then
+  echo "$DOMAIN already has HTTPS - keeping your existing certificate."
+  HTTPS=yes
 else
   if [ -n "$CERT_EMAIL" ]; then EMAIL_ARGS=(-m "$CERT_EMAIL"); else EMAIL_ARGS=(--register-unsafely-without-email); fi
   if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --redirect "${EMAIL_ARGS[@]}"; then
@@ -143,7 +191,7 @@ SCHEME=http
 [ "$HTTPS" = yes ] && SCHEME=https
 say "Done"
 echo "Admin panel:  $SCHEME://$DOMAIN/hisab/dashboard"
-echo "API for apps: $SCHEME://$DOMAIN"
+echo "API for apps: $SCHEME://$DOMAIN/hisab"
 if [ -n "$NEW_PASSWORD" ]; then
   echo
   echo "Admin login (save this, it is shown only once):"
