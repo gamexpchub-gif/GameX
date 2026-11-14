@@ -15,7 +15,7 @@ class MainShell extends StatelessWidget {
       mq.padding.bottom,
     );
     // Home and Category are full-bleed designs that scroll under the bar.
-    final isHome = shell.currentIndex <= 1 || shell.currentIndex == 4;
+    final isHome = shell.currentIndex != 3; // all but Reviews are full-bleed
 
     return Scaffold(
       extendBody: true,

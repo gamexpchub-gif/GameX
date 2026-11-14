@@ -97,6 +97,16 @@ class Order {
   final OrderStatus status;
 
   double get total => subtotal + deliveryFee - discount;
+
+  /// Expected delivery (4 days after ordering) / actual delivery (2 days).
+  DateTime get expectedDelivery => createdAt.add(const Duration(days: 4));
+  DateTime get deliveredAt => createdAt.add(const Duration(days: 2));
+
+  bool get isProcessing =>
+      status == OrderStatus.pending || status == OrderStatus.confirmed;
+  bool get isShipped => status == OrderStatus.shipped;
+  bool get isDelivered => status == OrderStatus.delivered;
+  bool get isReturned => status == OrderStatus.cancelled;
   int get itemCount => items.fold(0, (sum, i) => sum + i.quantity);
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(

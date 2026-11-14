@@ -13,38 +13,36 @@ import '../../../data/models/app_user.dart';
 import '../../../data/models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../cart/providers/cart_provider.dart';
-import '../../checkout/presentation/widgets/address_sheets.dart';
 import '../../home/presentation/widgets/home_sheets.dart';
+import '../../orders/presentation/order_assistant.dart';
 import '../../orders/providers/orders_provider.dart';
-import '../../wishlist/providers/wishlist_provider.dart';
 import '../providers/avatar_provider.dart';
 import 'account_sheets.dart';
 
 const _img = 'assets/images/home';
 const _ink = Color(0xFF0B1230);
 const _muted = Color(0xFF4A5372);
-const _purple = Color(0xFF6A3DF5);
+const _blue = Color(0xFF1F5BFF);
 
-/// Reward points: 1 point per ₹100 spent.
+/// Reward points: 1 point per ₹10 spent.
 int rewardPoints(List<Order> orders) =>
-    orders.fold(0.0, (s, o) => s + o.total) ~/ 100;
+    orders.fold(0.0, (s, o) => s + o.total) ~/ 10;
 
-/// GAMEX wallet: 1% cashback on every order.
+/// GAMEX wallet: 2% cashback on delivered orders.
 double walletBalance(List<Order> orders) =>
-    (orders.fold(0.0, (s, o) => s + o.total) * 0.01).roundToDouble();
+    (orders.where((o) => o.isDelivered).fold(0.0, (s, o) => s + o.total) * 0.02)
+        .roundToDouble();
 
-/// Account tab, laid out on the design's 887-px grid.
+/// Account tab, laid out on the design's 852-px grid.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mq = MediaQuery.of(context);
-    final d = mq.size.width / 887;
+    final d = mq.size.width / 852;
     final user = ref.watch(authProvider);
     final orders = ref.watch(ordersProvider);
-    final wish = ref.watch(wishlistProvider).length;
-
     Widget gap(double h) => SizedBox(height: h * d);
 
     return MediaQuery(
@@ -54,42 +52,43 @@ class ProfileScreen extends ConsumerWidget {
           statusBarColor: Colors.transparent,
         ),
         child: Scaffold(
-          backgroundColor: const Color(0xFFF1F3FC),
+          backgroundColor: const Color(0xFFEEF2FC),
           body: AuroraBackground(
             child: ListView(
               padding: EdgeInsets.only(
-                top: mq.padding.top,
-                bottom: mq.padding.bottom + 30 * d,
+                top: mq.padding.top + 12 * d,
+                bottom: mq.padding.bottom + 36 * d,
               ),
               children: [
                 _Header(d: d),
-                gap(8),
-                user == null
-                    ? _GuestCard(d: d)
-                    : _ProfileCard(user: user, d: d),
-                gap(18),
-                _Stats(
-                  d: d,
-                  orders: orders.length,
-                  wishlist: wish,
-                  points: rewardPoints(orders),
+                gap(22),
+                RepaintBoundary(
+                  child: _ProfileCard(d: d, user: user, orders: orders),
                 ),
                 gap(22),
-                _WalletCard(d: d, balance: walletBalance(orders)),
-                gap(18),
-                _OrdersCard(d: d, orders: orders),
-                gap(18),
-                _MenuGrid(d: d),
+                _Stats(d: d, orders: orders),
                 gap(22),
-                _RewardsBanner(d: d),
-                gap(22),
+                _WalletOffers(d: d, balance: walletBalance(orders)),
+                gap(20),
+                _MenuCard(d: d),
+                gap(36),
+                _SectionTitle(
+                  d: d,
+                  title: 'Support & Services',
+                  onViewAll: () => showHelpSheet(context),
+                ),
+                gap(18),
+                _Services(d: d),
+                gap(34),
+                _SectionTitle(d: d, title: 'Settings & Account'),
+                gap(16),
                 _SettingsCard(d: d, loggedIn: user != null),
-                gap(18),
+                gap(22),
                 Center(
                   child: Text(
                     'GAMEX v1.0.0 • Made with ♥ in India',
                     style: TextStyle(
-                      fontSize: 19 * d,
+                      fontSize: 17 * d,
                       color: const Color(0xFF8C95B0),
                     ),
                   ),
@@ -105,87 +104,93 @@ class ProfileScreen extends ConsumerWidget {
 
 // ───────────────────────────── Header ─────────────────────────────
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({required this.d});
   final double d;
 
   @override
-  Widget build(BuildContext context) {
-    Widget circle(Widget icon, VoidCallback onTap, {bool dot = false}) =>
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 80 * d,
-            height: 80 * d,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.95),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2A3D8F).withValues(alpha: 0.1),
-                  blurRadius: 16 * d,
-                ),
-              ],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                icon,
-                if (dot)
-                  Positioned(
-                    right: 16 * d,
-                    top: 14 * d,
-                    child: Container(
-                      width: 20 * d,
-                      height: 20 * d,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5283B),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2.5 * d),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(cartCountProvider);
+    Widget badge(int n) => Positioned(
+      right: -4 * d,
+      top: -6 * d,
+      child: Container(
+        width: 32 * d,
+        height: 32 * d,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE5283B),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2.5 * d),
+        ),
+        child: Text(
+          '$n',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 17 * d,
+            fontWeight: FontWeight.w700,
           ),
-        );
-    return SizedBox(
-      height: 130 * d,
-      child: Stack(
+        ),
+      ),
+    );
+    Widget btn(
+      Widget icon,
+      VoidCallback onTap, {
+      int count = 0,
+      bool square = false,
+    }) => GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 70 * d,
+        height: 70 * d,
+        decoration: BoxDecoration(
+          shape: square ? BoxShape.rectangle : BoxShape.circle,
+          borderRadius: square ? BorderRadius.circular(22 * d) : null,
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2A3D8F).withValues(alpha: 0.1),
+              blurRadius: 14 * d,
+            ),
+          ],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [icon, if (count > 0) badge(count)],
+        ),
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.fromLTRB(50 * d, 0, 30 * d, 0),
+      child: Row(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              '$_img/acct_header.jpg',
-              fit: BoxFit.fill,
-              filterQuality: FilterQuality.medium,
-            ),
+          Image.asset(
+            '$_img/logo_gamex.png',
+            width: 222 * d,
+            height: 70 * d,
+            filterQuality: FilterQuality.medium,
           ),
-          Positioned(
-            right: 34 * d,
-            top: 20 * d,
-            child: Row(
-              children: [
-                circle(
-                  Icon(Icons.search_rounded, size: 40 * d, color: _ink),
-                  () => context.push('/search'),
-                ),
-                SizedBox(width: 22 * d),
-                circle(
-                  Icon(
-                    Icons.notifications_none_rounded,
-                    size: 42 * d,
-                    color: _ink,
-                  ),
-                  () => showNotificationsSheet(context),
-                  dot: true,
-                ),
-                SizedBox(width: 22 * d),
-                circle(
-                  Icon(Icons.settings_outlined, size: 40 * d, color: _ink),
-                  () => showSettingsSheet(context),
-                ),
-              ],
+          const Spacer(),
+          btn(
+            Icon(Icons.notifications_none_rounded, size: 40 * d, color: _ink),
+            () => showNotificationsSheet(context),
+            count: 3,
+          ),
+          SizedBox(width: 18 * d),
+          btn(
+            Icon(Icons.shopping_cart_outlined, size: 38 * d, color: _ink),
+            () => context.push('/cart'),
+            count: cart,
+          ),
+          SizedBox(width: 18 * d),
+          btn(
+            Icon(Icons.center_focus_weak_rounded, size: 40 * d, color: _blue),
+            () => showAppSnack(
+              context,
+              'Scan an IMEI or GAMEX QR code — coming soon',
             ),
+            square: true,
           ),
         ],
       ),
@@ -195,446 +200,542 @@ class _Header extends StatelessWidget {
 
 // ───────────────────────────── Profile card ─────────────────────────────
 
-BoxDecoration _cardDecoration(double d, {double radius = 40}) => BoxDecoration(
-  borderRadius: BorderRadius.circular(radius * d),
-  border: Border.all(color: Colors.white, width: 2),
-  gradient: const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFFFFFFF), Color(0xFFF6F7FF), Color(0xFFEDE8FF)],
-  ),
-  boxShadow: [
-    BoxShadow(
-      color: const Color(0xFF3A2D9E).withValues(alpha: 0.08),
-      blurRadius: 30 * d,
-      offset: Offset(0, 12 * d),
-    ),
-  ],
-);
+/// Soft light ribbons on the right of the blue profile card.
+class _LiquidPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    Paint ribbon(double a) => Paint()
+      ..shader = LinearGradient(
+        colors: [
+          Colors.white.withValues(alpha: 0),
+          Colors.white.withValues(alpha: a),
+          const Color(0xFF8FB8FF).withValues(alpha: a * 0.6),
+        ],
+        stops: const [0, 0.6, 1],
+      ).createShader(Offset.zero & size);
+    final p1 = Path()
+      ..moveTo(w * 0.62, h)
+      ..cubicTo(w * 0.72, h * 0.62, w * 0.86, h * 0.72, w, h * 0.35)
+      ..lineTo(w, h * 0.55)
+      ..cubicTo(w * 0.9, h * 0.85, w * 0.78, h * 0.8, w * 0.7, h)
+      ..close();
+    canvas.drawPath(p1, ribbon(0.32));
+    final p2 = Path()
+      ..moveTo(w * 0.7, h * 0.55)
+      ..cubicTo(w * 0.8, h * 0.4, w * 0.9, h * 0.52, w, h * 0.12)
+      ..lineTo(w, h * 0.22)
+      ..cubicTo(w * 0.9, h * 0.6, w * 0.82, h * 0.5, w * 0.74, h * 0.62)
+      ..close();
+    canvas.drawPath(p2, ribbon(0.22));
+    // Warm glow bottom-right.
+    canvas.drawCircle(
+      Offset(w * 1.02, h * 0.95),
+      h * 0.5,
+      Paint()
+        ..shader =
+            RadialGradient(
+              colors: [
+                const Color(0xFFFFE7A8).withValues(alpha: 0.5),
+                Colors.transparent,
+              ],
+            ).createShader(
+              Rect.fromCircle(
+                center: Offset(w * 1.02, h * 0.95),
+                radius: h * 0.5,
+              ),
+            ),
+    );
+  }
 
-class _Avatar extends ConsumerWidget {
-  const _Avatar({
+  @override
+  bool shouldRepaint(_LiquidPainter oldDelegate) => false;
+}
+
+class _ProfileCard extends ConsumerWidget {
+  const _ProfileCard({
     required this.d,
-    required this.initials,
-    this.editable = true,
+    required this.user,
+    required this.orders,
   });
   final double d;
-  final String initials;
-  final bool editable;
+  final AppUser? user;
+  final List<Order> orders;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final path = ref.watch(avatarProvider);
-    final size = 210 * d;
-    return SizedBox(
-      width: size + 20 * d,
-      height: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: size,
-            height: size,
-            padding: EdgeInsets.all(7 * d),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const SweepGradient(
-                colors: [
-                  Color(0xFF12B3F6),
-                  Color(0xFF6A3DF5),
-                  Color(0xFFC04BFF),
-                  Color(0xFF12B3F6),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _purple.withValues(alpha: 0.35),
-                  blurRadius: 26 * d,
-                  offset: Offset(0, 8 * d),
-                ),
-              ],
-            ),
-            child: Container(
-              padding: EdgeInsets.all(5 * d),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-              ),
-              child: ClipOval(
-                child: path != null
-                    ? Image.file(File(path), fit: BoxFit.cover, cacheWidth: 400)
-                    : DecoratedBox(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFDDE6FF), Color(0xFFEDE3FF)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initials,
-                            style: TextStyle(
-                              fontSize: 70 * d,
-                              fontWeight: FontWeight.w800,
-                              color: _purple,
-                            ),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          ),
-          if (editable)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: GestureDetector(
-                onTap: () => showAvatarSheet(context),
-                child: Container(
-                  width: 62 * d,
-                  height: 62 * d,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 10 * d,
-                      ),
-                    ],
-                  ),
-                  child: Icon(Icons.edit_outlined, size: 32 * d, color: _ink),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.user, required this.d});
-  final AppUser user;
-  final double d;
-
-  @override
-  Widget build(BuildContext context) {
-    final joined = DateFormat('d MMM yyyy')
-        .format(user.joinedAt ?? DateTime.now());
-    Widget info(IconData icon, String text) => Padding(
-      padding: EdgeInsets.only(top: 14 * d),
-      child: Row(
-        children: [
-          Icon(icon, size: 30 * d, color: _ink),
-          SizedBox(width: 14 * d),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 23 * d,
-                fontWeight: FontWeight.w500,
-                color: _ink,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    final u = user;
+    final avatar = ref.watch(avatarProvider);
+    final points = rewardPoints(orders);
+    final since = DateFormat('MMM yyyy').format(u?.joinedAt ?? DateTime.now());
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20 * d),
-      child: Container(
-        height: 252 * d,
-        decoration: _cardDecoration(d, radius: 44),
-        child: Stack(
-          children: [
-            // Lavender glow behind the badge.
-            Positioned(
-              right: -40 * d,
-              bottom: -60 * d,
-              child: Container(
-                width: 360 * d,
-                height: 260 * d,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      const Color(0xFFB79CFF).withValues(alpha: 0.55),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
+      padding: EdgeInsets.symmetric(horizontal: 30 * d),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40 * d),
+        child: Container(
+          height: 275 * d,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0A2A8F), Color(0xFF0D3BC0), Color(0xFF1E5BEA)],
             ),
-            Positioned(
-              right: 14 * d,
-              top: 20 * d,
-              child: Image.asset(
-                '$_img/acct_badge.png',
-                width: 236 * d,
-                height: 202 * d,
-              ),
-            ),
-            Positioned(
-              left: 20 * d,
-              top: 20 * d,
-              child: _Avatar(
-                d: d,
-                initials: user.initials.isEmpty ? 'G' : user.initials,
-              ),
-            ),
-            Positioned(
-              left: 262 * d,
-              right: 236 * d,
-              top: 30 * d,
-              child: GestureDetector(
-                onTap: () => showEditProfileSheet(context),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(child: CustomPaint(painter: _LiquidPainter())),
+              // Avatar.
+              Positioned(
+                left: 40 * d,
+                top: 17 * d,
+                child: GestureDetector(
+                  onTap: u == null ? null : () => showAvatarSheet(context),
+                  child: SizedBox(
+                    width: 140 * d,
+                    height: 140 * d,
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              user.name,
-                              style: TextStyle(
-                                fontSize: 42 * d,
-                                fontWeight: FontWeight.w800,
-                                color: _ink,
-                                letterSpacing: -0.6 * d,
+                        Container(
+                          width: 134 * d,
+                          height: 134 * d,
+                          padding: EdgeInsets.all(5 * d),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.9),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.25),
+                                blurRadius: 16 * d,
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: avatar != null
+                                ? Image.file(
+                                    File(avatar),
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 300,
+                                  )
+                                : Container(
+                                    color: const Color(0xFFE6ECFF),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      u == null
+                                          ? 'G'
+                                          : (u.initials.isEmpty
+                                                ? 'G'
+                                                : u.initials),
+                                      style: TextStyle(
+                                        fontSize: 48 * d,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF0D3BC0),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        if (u != null)
+                          Positioned(
+                            right: 2 * d,
+                            bottom: 2 * d,
+                            child: Container(
+                              width: 38 * d,
+                              height: 38 * d,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF1F5BFF),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3 * d,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.check_rounded,
+                                size: 22 * d,
+                                color: Colors.white,
                               ),
                             ),
                           ),
-                        ),
-                        SizedBox(width: 8 * d),
-                        Icon(
-                          Icons.verified_rounded,
-                          size: 38 * d,
-                          color: const Color(0xFF1F66FF),
-                        ),
                       ],
                     ),
-                    SizedBox(height: 12 * d),
-                    Container(
-                      height: 44 * d,
-                      padding: EdgeInsets.symmetric(horizontal: 22 * d),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22 * d),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF4F2CF0), Color(0xFF8A4FFF)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _purple.withValues(alpha: 0.35),
-                            blurRadius: 14 * d,
-                            offset: Offset(0, 5 * d),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                  ),
+                ),
+              ),
+              // Name, email, phone.
+              Positioned(
+                left: 198 * d,
+                right: 120 * d,
+                top: 28 * d,
+                child: u == null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.workspace_premium_rounded,
-                            size: 28 * d,
-                            color: Colors.white,
-                          ),
-                          SizedBox(width: 10 * d),
                           Text(
-                            'Premium Member',
+                            'Welcome to GAMEX',
                             style: TextStyle(
-                              fontSize: 22 * d,
-                              fontWeight: FontWeight.w700,
                               color: Colors.white,
+                              fontSize: 30 * d,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 6 * d),
+                          Text(
+                            'Sign in to track orders and earn rewards',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 18 * d,
                             ),
                           ),
                         ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    u.name,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 30 * d,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8 * d),
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 30 * d,
+                                color: const Color(0xFF4F8BFF),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 10 * d),
+                          Text(
+                            u.email.isEmpty ? u.customerId : u.email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 19 * d,
+                            ),
+                          ),
+                          SizedBox(height: 12 * d),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.call_rounded,
+                                size: 22 * d,
+                                color: Colors.white.withValues(alpha: 0.75),
+                              ),
+                              SizedBox(width: 10 * d),
+                              Text(
+                                _formatPhone(u.phone),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 19 * d,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(width: 12 * d),
+                              if ((u.phone ?? '').isNotEmpty)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12 * d,
+                                    vertical: 3 * d,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF16A34A),
+                                    borderRadius: BorderRadius.circular(14 * d),
+                                  ),
+                                  child: Text(
+                                    'Verified',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16 * d,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+              ),
+              // Edit profile + QR.
+              Positioned(
+                right: 25 * d,
+                top: 56 * d,
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => u == null
+                          ? context.push(
+                              '/login?from=${Uri.encodeComponent('/profile')}',
+                            )
+                          : showEditProfileSheet(context),
+                      child: Container(
+                        height: 50 * d,
+                        padding: EdgeInsets.symmetric(horizontal: 18 * d),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(25 * d),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              u == null
+                                  ? Icons.login_rounded
+                                  : Icons.edit_outlined,
+                              size: 24 * d,
+                              color: Colors.white,
+                            ),
+                            SizedBox(width: 8 * d),
+                            Text(
+                              u == null ? 'Sign In' : 'Edit Profile',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18 * d,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    info(Icons.badge_outlined, 'User ID: ${user.customerId}'),
-                    info(Icons.calendar_month_outlined, 'Joined: $joined'),
+                    SizedBox(width: 14 * d),
+                    GestureDetector(
+                      onTap: () => showIdCardSheet(context),
+                      child: Container(
+                        width: 50 * d,
+                        height: 50 * d,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12 * d),
+                        ),
+                        child: Icon(
+                          Icons.qr_code_2_rounded,
+                          size: 36 * d,
+                          color: _blue,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
+              // GAMEX Prime + points.
+              Positioned(
+                left: 27 * d,
+                right: 23 * d,
+                bottom: 17 * d,
+                child: Container(
+                  height: 76 * d,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF081A4F).withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(24 * d),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(width: 24 * d),
+                      Icon(
+                        Icons.workspace_premium_rounded,
+                        size: 46 * d,
+                        color: const Color(0xFFF7C33C),
+                      ),
+                      SizedBox(width: 18 * d),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'GAMEX Prime',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 21 * d,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                SizedBox(width: 10 * d),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 9 * d,
+                                    vertical: 1 * d,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5C542),
+                                    borderRadius: BorderRadius.circular(10 * d),
+                                  ),
+                                  child: Text(
+                                    'PRO',
+                                    style: TextStyle(
+                                      color: const Color(0xFF3B2A00),
+                                      fontSize: 14 * d,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              'Member since $since',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 16 * d,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 1.5,
+                        height: 46 * d,
+                        color: Colors.white.withValues(alpha: 0.25),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => showRewardsSheet(context, points),
+                          child: Row(
+                            children: [
+                              SizedBox(width: 28 * d),
+                              Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 38 * d,
+                                color: const Color(0xFFF7C33C),
+                              ),
+                              SizedBox(width: 16 * d),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        '${NumberFormat.decimalPattern('en_IN').format(points)} Points',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 21 * d,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      'Worth ${formatPrice((points / 10).roundToDouble())}',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                        fontSize: 16 * d,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: 34 * d,
+                                color: Colors.white,
+                              ),
+                              SizedBox(width: 14 * d),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _GuestCard extends StatelessWidget {
-  const _GuestCard({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20 * d),
-      child: Container(
-        height: 252 * d,
-        decoration: _cardDecoration(d, radius: 44),
-        padding: EdgeInsets.all(20 * d),
-        child: Row(
-          children: [
-            _Avatar(d: d, initials: 'G', editable: false),
-            SizedBox(width: 24 * d),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome to GAMEX',
-                    style: TextStyle(
-                      fontSize: 38 * d,
-                      fontWeight: FontWeight.w800,
-                      color: _ink,
-                    ),
-                  ),
-                  SizedBox(height: 6 * d),
-                  Text(
-                    'Sign in to track orders, earn rewards and get exclusive offers.',
-                    style: TextStyle(
-                      fontSize: 21 * d,
-                      color: _muted,
-                      height: 1.35,
-                    ),
-                  ),
-                  SizedBox(height: 18 * d),
-                  GestureDetector(
-                    onTap: () => context.push(
-                      '/login?from=${Uri.encodeComponent('/profile')}',
-                    ),
-                    child: Container(
-                      height: 58 * d,
-                      padding: EdgeInsets.symmetric(horizontal: 30 * d),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(29 * d),
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF12B3F6),
-                            Color(0xFF2F5CFF),
-                            Color(0xFF8B3DFF),
-                          ],
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.login_rounded,
-                            color: Colors.white,
-                            size: 30 * d,
-                          ),
-                          SizedBox(width: 12 * d),
-                          Text(
-                            'Sign in / Register',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 23 * d,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  static String _formatPhone(String? p) {
+    final digits = (p ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 10) return p ?? '';
+    final last = digits.substring(digits.length - 10);
+    return '+91 ${last.substring(0, 5)} ${last.substring(5)}';
   }
 }
 
 // ───────────────────────────── Stats ─────────────────────────────
 
 class _Stats extends StatelessWidget {
-  const _Stats({
-    required this.d,
-    required this.orders,
-    required this.wishlist,
-    required this.points,
-  });
+  const _Stats({required this.d, required this.orders});
   final double d;
-  final int orders;
-  final int wishlist;
-  final int points;
+  final List<Order> orders;
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      (
-        Icons.shopping_bag_outlined,
-        const Color(0xFF1F66FF),
-        '$orders',
-        'Orders',
-        () => context.go('/orders'),
-      ),
-      (
-        Icons.favorite_border_rounded,
-        const Color(0xFF9B3DF5),
-        '$wishlist',
-        'Wishlist',
-        () => context.push('/wishlist'),
-      ),
-      (
-        Icons.local_offer_outlined,
-        const Color(0xFFF59E0B),
-        '${coupons.length}',
-        'Coupons',
-        () => showCouponsListSheet(context),
-      ),
-      (
-        Icons.star_border_rounded,
-        const Color(0xFF7A3CF0),
-        NumberFormat.decimalPattern('en_IN').format(points),
-        'Reward Points',
-        () => showRewardsSheet(context, points),
-      ),
+      ('ic3d_box', orders.length, 'Total Orders'),
+      ('ic3d_check', orders.where((o) => o.isDelivered).length, 'Delivered'),
+      ('ic3d_truck', orders.where((o) => o.isShipped).length, 'In Transit'),
+      ('ic3d_return', orders.where((o) => o.isReturned).length, 'Returns'),
     ];
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20 * d),
+      padding: EdgeInsets.symmetric(horizontal: 36 * d),
       child: Row(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) SizedBox(width: 14 * d),
+            if (i > 0) SizedBox(width: 17 * d),
             Expanded(
-              flex: i == 3 ? 23 : 20,
               child: GestureDetector(
-                onTap: items[i].$5,
+                onTap: () => context.go('/orders'),
                 child: Container(
-                  height: 156 * d,
-                  decoration: _cardDecoration(d, radius: 34),
+                  height: 125 * d,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(26 * d),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
+                        blurRadius: 14 * d,
+                        offset: Offset(0, 5 * d),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(items[i].$1, size: 50 * d, color: items[i].$2),
+                      Image.asset(
+                        '$_img/${items[i].$1}.png',
+                        width: 50 * d,
+                        height: 48 * d,
+                      ),
                       SizedBox(height: 4 * d),
                       Text(
-                        items[i].$3,
+                        '${items[i].$2}',
                         style: TextStyle(
-                          fontSize: 38 * d,
+                          fontSize: 30 * d,
                           height: 1.15,
                           fontWeight: FontWeight.w800,
                           color: _ink,
                         ),
                       ),
-                      FittedBox(
-                        child: Text(
-                          items[i].$4,
-                          style: TextStyle(fontSize: 22 * d, color: _ink),
-                        ),
+                      Text(
+                        items[i].$3,
+                        style: TextStyle(fontSize: 17 * d, color: _ink),
                       ),
                     ],
                   ),
@@ -648,423 +749,443 @@ class _Stats extends StatelessWidget {
   }
 }
 
-// ───────────────────────────── Wallet ─────────────────────────────
+// ───────────────────────────── Wallet + offers ─────────────────────────────
 
-class _WalletCard extends StatelessWidget {
-  const _WalletCard({required this.d, required this.balance});
+class _WalletOffers extends StatelessWidget {
+  const _WalletOffers({required this.d, required this.balance});
   final double d;
   final double balance;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18 * d),
+    Widget card({
+      required List<Color> colors,
+      required String icon,
+      required Widget text,
+      required VoidCallback onTap,
+      required Color arrow,
+    }) => Expanded(
       child: GestureDetector(
-        onTap: () => showWalletSheet(context),
+        onTap: onTap,
         child: Container(
-          height: 132 * d,
+          height: 84 * d,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(50 * d),
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xFF1F66FF),
-                Color(0xFF3B44F2),
-                Color(0xFF6E3CF0),
-                Color(0xFFA24BFF),
-              ],
-              stops: [0, 0.4, 0.75, 1],
-            ),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.6),
-              width: 2,
-            ),
+            borderRadius: BorderRadius.circular(30 * d),
+            gradient: LinearGradient(colors: colors),
+            border: Border.all(color: Colors.white, width: 1.6),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3B44F2).withValues(alpha: 0.35),
-                blurRadius: 26 * d,
-                offset: Offset(0, 12 * d),
+                color: colors.last.withValues(alpha: 0.35),
+                blurRadius: 16 * d,
+                offset: Offset(0, 6 * d),
               ),
             ],
           ),
-          child: Stack(
+          child: Row(
             children: [
-              // Glossy top highlight for a liquid-glass feel.
-              Positioned(
-                left: 30 * d,
-                right: 30 * d,
-                top: 4 * d,
+              SizedBox(width: 26 * d),
+              Image.asset('$_img/$icon.png', width: 62 * d, height: 62 * d),
+              SizedBox(width: 18 * d),
+              Expanded(child: text),
+              Container(
+                width: 46 * d,
                 height: 46 * d,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30 * d),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.28),
-                        Colors.white.withValues(alpha: 0),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 28 * d,
+                  color: arrow,
+                ),
+              ),
+              SizedBox(width: 16 * d),
+            ],
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 30 * d),
+      child: Row(
+        children: [
+          card(
+            colors: const [Color(0xFFE4EEFF), Color(0xFFC4DAFF)],
+            icon: 'ic3d_wallet',
+            arrow: _blue,
+            onTap: () => showWalletSheet(context),
+            text: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'GAMEX Wallet',
+                  style: TextStyle(
+                    fontSize: 17 * d,
+                    fontWeight: FontWeight.w600,
+                    color: _ink,
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatPrice(balance),
+                    style: TextStyle(
+                      fontSize: 30 * d,
+                      height: 1.1,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 18 * d),
+          card(
+            colors: const [Color(0xFFF2EAFF), Color(0xFFDCC9FF)],
+            icon: 'ic3d_offer',
+            arrow: const Color(0xFF6A3DF5),
+            onTap: () => showCouponsListSheet(context),
+            text: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'My Offers',
+                  style: TextStyle(
+                    fontSize: 19 * d,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
+                ),
+                Text(
+                  '${coupons.length + 1} Active Offers',
+                  style: TextStyle(
+                    fontSize: 17 * d,
+                    color: const Color(0xFF4B3A8C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────────── Lists ─────────────────────────────
+
+typedef _Row = (IconData, String, String, VoidCallback);
+
+class _ListCard extends StatelessWidget {
+  const _ListCard({required this.d, required this.rows});
+  final double d;
+  final List<_Row> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 30 * d),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(30 * d),
+          border: Border.all(color: Colors.white, width: 1.6),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
+              blurRadius: 18 * d,
+              offset: Offset(0, 6 * d),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 105 * d,
+                    endIndent: 60 * d,
+                    color: const Color(0xFFE6EAF4),
+                  ),
+                InkWell(
+                  onTap: rows[i].$4,
+                  borderRadius: BorderRadius.circular(30 * d),
+                  child: SizedBox(
+                    height: 68 * d,
+                    child: Row(
+                      children: [
+                        SizedBox(width: 36 * d),
+                        Icon(
+                          rows[i].$1,
+                          size: 38 * d,
+                          color: const Color(0xFF1B2340),
+                        ),
+                        SizedBox(width: 32 * d),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                rows[i].$2,
+                                style: TextStyle(
+                                  fontSize: 20 * d,
+                                  fontWeight: FontWeight.w700,
+                                  color: _ink,
+                                ),
+                              ),
+                              Text(
+                                rows[i].$3,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16 * d,
+                                  color: _muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 38 * d,
+                          color: const Color(0xFF1B2340),
+                        ),
+                        SizedBox(width: 28 * d),
                       ],
                     ),
                   ),
                 ),
-              ),
-              Row(
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuCard extends StatelessWidget {
+  const _MenuCard({required this.d});
+  final double d;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ListCard(
+      d: d,
+      rows: [
+        (
+          Icons.view_in_ar_outlined,
+          'My Orders',
+          'Track, manage and view all your orders',
+          () => context.go('/orders'),
+        ),
+        (
+          Icons.smartphone_rounded,
+          'My Devices',
+          'Purchased, traded-in and warranty devices',
+          () => showDevicesSheet(context),
+        ),
+        (
+          Icons.favorite_border_rounded,
+          'Wishlist',
+          'Your saved phones and alerts',
+          () => context.push('/wishlist'),
+        ),
+        (
+          Icons.notifications_none_rounded,
+          'Price Alerts',
+          'Get notified when prices drop',
+          () => showPriceAlertsSheet(context),
+        ),
+        (
+          Icons.swap_horiz_rounded,
+          'Trade-In / Sell Phone',
+          'Exchange your old phone for the best value',
+          () => showTradeInSheet(context),
+        ),
+        (
+          Icons.credit_card_rounded,
+          'EMI & Payments',
+          'EMI plans, transactions and invoices',
+          () => showEmiSheet(context),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.d, required this.title, this.onViewAll});
+  final double d;
+  final String title;
+  final VoidCallback? onViewAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 32 * d),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 26 * d,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+              letterSpacing: -0.3 * d,
+            ),
+          ),
+          const Spacer(),
+          if (onViewAll != null)
+            GestureDetector(
+              onTap: onViewAll,
+              child: Row(
                 children: [
-                  SizedBox(width: 32 * d),
-                  Container(
-                    width: 104 * d,
-                    height: 104 * d,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32 * d),
-                      color: Colors.white.withValues(alpha: 0.16),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_rounded,
-                      color: Colors.white,
-                      size: 54 * d,
+                  Text(
+                    'View All',
+                    style: TextStyle(
+                      fontSize: 20 * d,
+                      fontWeight: FontWeight.w600,
+                      color: _blue,
                     ),
                   ),
-                  SizedBox(width: 30 * d),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'My Wallet',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 34 * d,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  SizedBox(width: 10 * d),
+                  Icon(Icons.arrow_forward_rounded, size: 26 * d, color: _blue),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Services extends StatelessWidget {
+  const _Services({required this.d});
+  final double d;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <(IconData, String, VoidCallback, bool)>[
+      (
+        Icons.headset_mic_outlined,
+        'Help Center',
+        () => showHelpSheet(context),
+        false,
+      ),
+      (
+        Icons.chat_outlined,
+        'Live Chat',
+        () => showOrderAssistant(context),
+        true,
+      ),
+      (
+        Icons.verified_user_outlined,
+        'Warranty\nClaim',
+        () => showRequestSheet(
+          context,
+          title: 'Warranty Claim',
+          subtitle: 'Covered under your GAMEX warranty',
+          cta: 'Submit Claim',
+        ),
+        false,
+      ),
+      (
+        Icons.build_outlined,
+        'Service &\nRepair',
+        () => showRequestSheet(
+          context,
+          title: 'Service & Repair',
+          subtitle: 'Doorstep pickup by certified technicians',
+          cta: 'Book Service',
+        ),
+        false,
+      ),
+      (
+        Icons.location_on_outlined,
+        'Pickup &\nReturn',
+        () => showRequestSheet(
+          context,
+          title: 'Pickup & Return',
+          subtitle: 'Free pickup within 7 days of delivery',
+          cta: 'Schedule Pickup',
+        ),
+        false,
+      ),
+    ];
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 30 * d),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) SizedBox(width: 16 * d),
+            Expanded(
+              child: GestureDetector(
+                onTap: items[i].$3,
+                child: Container(
+                  height: 120 * d,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(24 * d),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
+                        blurRadius: 14 * d,
+                        offset: Offset(0, 5 * d),
                       ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(items[i].$1, size: 46 * d, color: _blue),
+                          if (items[i].$4)
+                            Positioned(
+                              right: -10 * d,
+                              top: -6 * d,
+                              child: Container(
+                                width: 16 * d,
+                                height: 16 * d,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2 * d,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: 8 * d),
                       Text(
-                        'GAMEX Balance',
+                        items[i].$2,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.88),
-                          fontSize: 22 * d,
+                          fontSize: 16.5 * d,
+                          height: 1.15,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
                         ),
                       ),
                     ],
                   ),
-                  Container(
-                    width: 2 * d,
-                    height: 66 * d,
-                    margin: EdgeInsets.symmetric(horizontal: 26 * d),
-                    color: Colors.white.withValues(alpha: 0.35),
-                  ),
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '${formatPrice(balance)}.00',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 50 * d,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 22 * d),
-                  Container(
-                    width: 60 * d,
-                    height: 60 * d,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      color: _purple,
-                      size: 34 * d,
-                    ),
-                  ),
-                  SizedBox(width: 28 * d),
-                ],
+                ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Orders ─────────────────────────────
-
-class _OrdersCard extends StatelessWidget {
-  const _OrdersCard({required this.d, required this.orders});
-  final double d;
-  final List<Order> orders;
-
-  int _count(bool Function(Order o) f) => orders.where(f).length;
-
-  @override
-  Widget build(BuildContext context) {
-    final tiles = [
-      (
-        Icons.credit_card_rounded,
-        const Color(0xFF1F66FF),
-        'To Pay',
-        _count(
-          (o) =>
-              o.status == OrderStatus.pending &&
-              o.paymentMethod == PaymentMethod.cashOnDelivery,
-        ),
-      ),
-      (
-        Icons.inventory_2_outlined,
-        const Color(0xFF1F66FF),
-        'Processing',
-        _count(
-          (o) =>
-              o.status == OrderStatus.confirmed ||
-              (o.status == OrderStatus.pending &&
-                  o.paymentMethod != PaymentMethod.cashOnDelivery),
-        ),
-      ),
-      (
-        Icons.local_shipping_outlined,
-        const Color(0xFF1F66FF),
-        'Shipped',
-        _count((o) => o.status == OrderStatus.shipped),
-      ),
-      (
-        Icons.check_circle_outline_rounded,
-        const Color(0xFF16A34A),
-        'Delivered',
-        _count((o) => o.status == OrderStatus.delivered),
-      ),
-      (
-        Icons.replay_rounded,
-        const Color(0xFF7A3CF0),
-        'Returns',
-        _count((o) => o.status == OrderStatus.cancelled),
-      ),
-    ];
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20 * d),
-      child: Container(
-        decoration: _cardDecoration(d),
-        padding: EdgeInsets.fromLTRB(14 * d, 22 * d, 14 * d, 16 * d),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                SizedBox(width: 26 * d),
-                Icon(Icons.view_in_ar_rounded, size: 48 * d, color: _purple),
-                SizedBox(width: 20 * d),
-                Text(
-                  'My Orders',
-                  style: TextStyle(
-                    fontSize: 36 * d,
-                    fontWeight: FontWeight.w800,
-                    color: _ink,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => context.go('/orders'),
-                  child: Container(
-                    height: 48 * d,
-                    padding: EdgeInsets.symmetric(horizontal: 22 * d),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24 * d),
-                      border: Border.all(color: const Color(0xFFE3E8F5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          'View All Orders',
-                          style: TextStyle(
-                            fontSize: 21 * d,
-                            fontWeight: FontWeight.w600,
-                            color: _ink,
-                          ),
-                        ),
-                        SizedBox(width: 10 * d),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 28 * d,
-                          color: _ink,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(width: 16 * d),
-              ],
-            ),
-            SizedBox(height: 22 * d),
-            Row(
-              children: [
-                for (var i = 0; i < tiles.length; i++) ...[
-                  if (i > 0) SizedBox(width: 14 * d),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => context.go('/orders'),
-                      child: Container(
-                        height: 110 * d,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(28 * d),
-                          border: Border.all(color: Colors.white),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF2A3D8F)
-                                  .withValues(alpha: 0.07),
-                              blurRadius: 12 * d,
-                              offset: Offset(0, 4 * d),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    tiles[i].$1,
-                                    size: 46 * d,
-                                    color: tiles[i].$2,
-                                  ),
-                                  SizedBox(height: 6 * d),
-                                  FittedBox(
-                                    child: Text(
-                                      tiles[i].$3,
-                                      style: TextStyle(
-                                        fontSize: 22 * d,
-                                        fontWeight: FontWeight.w600,
-                                        color: _ink,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (tiles[i].$4 > 0)
-                              Positioned(
-                                right: 10 * d,
-                                top: -6 * d,
-                                child: Container(
-                                  width: 34 * d,
-                                  height: 34 * d,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE5283B),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2 * d,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '${tiles[i].$4}',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18 * d,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Menu grid ─────────────────────────────
-
-class _MenuGrid extends ConsumerWidget {
-  const _MenuGrid({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final points = rewardPoints(ref.watch(ordersProvider));
-    final items = <(IconData, String, String, VoidCallback)>[
-      (
-        Icons.person_outline_rounded,
-        'My Profile',
-        'Manage your personal info',
-        () => showEditProfileSheet(context),
-      ),
-      (
-        Icons.location_on_outlined,
-        'Saved Addresses',
-        'Delivery & Billing addresses',
-        () => showAddressPicker(context),
-      ),
-      (
-        Icons.credit_card_rounded,
-        'Payment Methods',
-        'UPI, Cards & Wallets',
-        () => showPaymentMethodsSheet(context),
-      ),
-      (
-        Icons.verified_user_outlined,
-        'Account Security',
-        'Password, 2FA & Privacy',
-        () => showSecuritySheet(context),
-      ),
-      (
-        Icons.local_offer_outlined,
-        'My Coupons',
-        'View & manage coupons',
-        () => showCouponsListSheet(context),
-      ),
-      (
-        Icons.card_giftcard_rounded,
-        'Rewards & Discounts',
-        'Points, Vouchers & Offers',
-        () => showRewardsSheet(context, points),
-      ),
-      (
-        Icons.favorite_border_rounded,
-        'Wishlist',
-        'Your saved products',
-        () => context.push('/wishlist'),
-      ),
-      (
-        Icons.headset_mic_outlined,
-        'Help & Support',
-        'Get help, track queries & more',
-        () => showHelpSheet(context),
-      ),
-    ];
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18 * d),
-      child: Column(
-        children: [
-          for (var r = 0; r < items.length; r += 2) ...[
-            if (r > 0) SizedBox(height: 8 * d),
-            Row(
-              children: [
-                Expanded(
-                  child: _MenuTile(d: d, item: items[r]),
-                ),
-                SizedBox(width: 13 * d),
-                Expanded(
-                  child: _MenuTile(d: d, item: items[r + 1]),
-                ),
-              ],
             ),
           ],
         ],
@@ -1072,233 +1193,6 @@ class _MenuGrid extends ConsumerWidget {
     );
   }
 }
-
-class _MenuTile extends StatelessWidget {
-  const _MenuTile({required this.d, required this.item});
-  final double d;
-  final (IconData, String, String, VoidCallback) item;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: item.$4,
-      child: Container(
-        height: 82 * d,
-        decoration: _cardDecoration(d, radius: 26),
-        padding: EdgeInsets.only(left: 26 * d, right: 18 * d),
-        child: Row(
-          children: [
-            ShaderMask(
-              blendMode: BlendMode.srcIn,
-              shaderCallback: (r) => const LinearGradient(
-                colors: [Color(0xFF2F5CFF), Color(0xFF9B3DF5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ).createShader(r),
-              child: Icon(item.$1, size: 48 * d),
-            ),
-            SizedBox(width: 18 * d),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      item.$2,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 25 * d,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
-                      ),
-                    ),
-                  ),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      item.$3,
-                      maxLines: 1,
-                      style: TextStyle(fontSize: 19 * d, color: _muted),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, size: 38 * d, color: _ink),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Rewards banner ─────────────────────────────
-
-class _RewardsBanner extends ConsumerWidget {
-  const _RewardsBanner({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final points = rewardPoints(ref.watch(ordersProvider));
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18 * d),
-      child: Container(
-        height: 224 * d,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(44 * d),
-          border: Border.all(color: Colors.white, width: 2),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF7F5FF), Color(0xFFEDE6FF), Color(0xFFF4EFFF)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF6A3DF5).withValues(alpha: 0.12),
-              blurRadius: 30 * d,
-              offset: Offset(0, 12 * d),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 6 * d,
-              top: 6 * d,
-              child: Image.asset(
-                '$_img/acct_gift.png',
-                width: 222 * d,
-                height: 194 * d,
-              ),
-            ),
-            Positioned(
-              left: 220 * d,
-              top: 30 * d,
-              right: 300 * d,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.baseline,
-                            baseline: TextBaseline.alphabetic,
-                            child: ShaderMask(
-                              blendMode: BlendMode.srcIn,
-                              shaderCallback: (r) => const LinearGradient(
-                                colors: [Color(0xFF5B2DF0), Color(0xFF9B3DF5)],
-                              ).createShader(r),
-                              child: Text(
-                                'GAMEX',
-                                style: TextStyle(
-                                  fontSize: 40 * d,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5 * d,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const TextSpan(text: ' Rewards'),
-                        ],
-                      ),
-                      style: TextStyle(
-                        fontSize: 40 * d,
-                        fontWeight: FontWeight.w800,
-                        color: _ink,
-                        letterSpacing: -0.5 * d,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 8 * d),
-                  Text(
-                    'Earn points on every order and redeem for exciting discounts.',
-                    maxLines: 3,
-                    style: TextStyle(
-                      fontSize: 22 * d,
-                      height: 1.3,
-                      color: _ink,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              right: 22 * d,
-              top: 72 * d,
-              child: GestureDetector(
-                onTap: () => showRewardsSheet(context, points),
-                child: Container(
-                  height: 66 * d,
-                  padding: EdgeInsets.symmetric(horizontal: 26 * d),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(33 * d),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF4F2CF0), Color(0xFF8A4FFF)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _purple.withValues(alpha: 0.35),
-                        blurRadius: 16 * d,
-                        offset: Offset(0, 6 * d),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Explore Rewards',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22 * d,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: 10 * d),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                        size: 28 * d,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 16 * d,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < 3; i++)
-                    Container(
-                      margin: EdgeInsets.symmetric(horizontal: 6 * d),
-                      width: 14 * d,
-                      height: 14 * d,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: i == 0 ? _purple : const Color(0xFFD4CCF5),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Settings ─────────────────────────────
 
 class _SettingsCard extends ConsumerWidget {
   const _SettingsCard({required this.d, required this.loggedIn});
@@ -1307,83 +1201,41 @@ class _SettingsCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    Widget row(
-      IconData icon,
-      String title,
-      VoidCallback onTap, {
-      Color? color,
-      String? trailing,
-    }) => InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 30 * d, vertical: 22 * d),
-        child: Row(
-          children: [
-            Icon(icon, size: 38 * d, color: color ?? _ink),
-            SizedBox(width: 24 * d),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 24 * d,
-                  fontWeight: FontWeight.w600,
-                  color: color ?? _ink,
-                ),
-              ),
-            ),
-            if (trailing != null)
-              Text(
-                trailing,
-                style: TextStyle(fontSize: 21 * d, color: _muted),
-              ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 36 * d,
-              color: color ?? _ink,
-            ),
-          ],
+    return _ListCard(
+      d: d,
+      rows: [
+        (
+          Icons.person_outline_rounded,
+          'Account Settings',
+          'Profile, email, phone and security',
+          () {
+            if (loggedIn) {
+              showEditProfileSheet(context);
+            } else {
+              context.push('/login?from=${Uri.encodeComponent('/profile')}');
+            }
+          },
         ),
-      ),
-    );
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18 * d),
-      child: Container(
-        decoration: _cardDecoration(d, radius: 34),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            children: [
-              row(
-                Icons.tune_rounded,
-                'App Settings',
-                () => showSettingsSheet(context),
-                trailing: 'Theme, alerts',
-              ),
-              Divider(height: 1, indent: 92 * d),
-              row(
-                Icons.receipt_long_outlined,
-                'Order History',
-                () => context.go('/orders'),
-              ),
-              Divider(height: 1, indent: 92 * d),
-              row(
-                Icons.privacy_tip_outlined,
-                'Privacy Policy & Terms',
-                () => showAppSnack(context, 'Opening policy…'),
-              ),
-              if (loggedIn) ...[
-                Divider(height: 1, indent: 92 * d),
-                row(
-                  Icons.logout_rounded,
-                  'Log out',
-                  () => confirmLogout(context, ref),
-                  color: const Color(0xFFE5283B),
-                ),
-              ],
-            ],
+        (
+          Icons.notifications_none_rounded,
+          'Notification Preferences',
+          'Offers, orders and price alerts',
+          () => showSettingsSheet(context),
+        ),
+        (
+          Icons.verified_user_outlined,
+          'Privacy & Security',
+          'Password, 2FA and account protection',
+          () => showSecuritySheet(context),
+        ),
+        if (loggedIn)
+          (
+            Icons.logout_rounded,
+            'Log Out',
+            'Sign out of this device',
+            () => confirmLogout(context, ref),
           ),
-        ),
-      ),
+      ],
     );
   }
 }
