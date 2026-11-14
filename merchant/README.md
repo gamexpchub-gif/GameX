@@ -11,7 +11,9 @@ flutter build apk --release
 flutter install
 ```
 
-Demo login: any Indian mobile number (starting 6–9), OTP **123456**.
+Start the GAMEX server first (`../server/README.md`), then connect the phone with `adb reverse tcp:8080 tcp:8080` (USB) or set the Wi-Fi address with ⚙ on the login screen.
+
+Demo login: **9876543210** (Mobile Point Andheri) with OTP **123456**. A new number creates a new store, which waits for KYC approval in the admin panel.
 
 ## Features
 
@@ -30,4 +32,4 @@ Demo login: any Indian mobile number (starting 6–9), OTP **123456**.
 
 Fees: 8% commission + ₹49 fixed fee + 18% GST on fees. Free shipping. Payouts 7 days after delivery.
 
-Data is stored on the device (demo data on first launch) until the shared backend is connected.
+Everything syncs with the GAMEX server every 20 seconds (pull down to refresh). The last data stays available offline.

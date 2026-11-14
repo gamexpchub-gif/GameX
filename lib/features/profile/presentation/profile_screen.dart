@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/widgets/server_sheet.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/glass.dart';
@@ -1227,6 +1228,12 @@ class _SettingsCard extends ConsumerWidget {
           'Privacy & Security',
           'Password, 2FA and account protection',
           () => showSecuritySheet(context),
+        ),
+        (
+          Icons.dns_outlined,
+          'GAMEX Server',
+          'Connection for seller listings & orders',
+          () => showServerSheet(context),
         ),
         if (loggedIn)
           (

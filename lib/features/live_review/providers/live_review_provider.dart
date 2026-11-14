@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api.dart';
 import '../../../core/storage.dart';
+import '../../auth/providers/auth_provider.dart';
 
 const _key = 'live_review_requests_v1';
 
@@ -55,8 +57,8 @@ class LiveRequest {
   bool get active =>
       status == LiveStatus.requested || status == LiveStatus.scheduled;
 
-  LiveRequest copyWith({LiveStatus? status}) => LiveRequest(
-    id: id,
+  LiveRequest copyWith({LiveStatus? status, String? id}) => LiveRequest(
+    id: id ?? this.id,
     productId: productId,
     productName: productName,
     image: image,
@@ -100,7 +102,12 @@ class LiveRequest {
 
 class LiveRequestsNotifier extends Notifier<List<LiveRequest>> {
   @override
-  List<LiveRequest> build() =>
+  List<LiveRequest> build() {
+    Future.microtask(sync);
+    return _load();
+  }
+
+  List<LiveRequest> _load() =>
       ref
           .read(localStoreProvider)
           .readJson(
@@ -118,12 +125,56 @@ class LiveRequestsNotifier extends Notifier<List<LiveRequest>> {
         .writeJson(_key, list.map((e) => e.toJson()).toList());
   }
 
-  /// Submits a request; the demo auto-confirms it as "Scheduled".
+  /// Sends the request to the seller via the GAMEX server. Built-in
+  /// catalogue phones (no seller) are confirmed by GAMEX automatically.
   Future<LiveRequest> request(LiveRequest r) async {
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    final scheduled = r.copyWith(status: LiveStatus.scheduled);
-    await _save([scheduled, ...state]);
-    return scheduled;
+    if (!r.productId.startsWith('GXL')) {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final scheduled = r.copyWith(status: LiveStatus.scheduled);
+      await _save([scheduled, ...state]);
+      return scheduled;
+    }
+    final user = ref.read(authProvider);
+    final j = await ref.read(apiProvider).post('/live', {
+      'listingId': r.productId,
+      'customer': {'id': user?.id, 'name': user?.name ?? 'GAMEX Customer'},
+      'phone': r.phone,
+      'mode': r.mode.label,
+      'language': r.language,
+      'slot': r.slot.toIso8601String(),
+      'notes': r.notes,
+    }) as Map;
+    final saved = r.copyWith(id: j['id'] as String);
+    await _save([saved, ...state]);
+    return saved;
+  }
+
+  static const _map = {
+    'pending': LiveStatus.requested,
+    'confirmed': LiveStatus.scheduled,
+    'done': LiveStatus.completed,
+    'declined': LiveStatus.cancelled,
+  };
+
+  /// Pulls seller decisions for marketplace requests.
+  Future<void> sync() async {
+    final ids = [
+      for (final r in state)
+        if (r.productId.startsWith('GXL') && r.active) r.id,
+    ];
+    if (ids.isEmpty) return;
+    try {
+      final list =
+          await ref.read(apiProvider).get('/live/status?ids=${ids.join(',')}')
+              as List;
+      final byId = {
+        for (final e in list.cast<Map>()) e['id'] as String: _map[e['stage']],
+      };
+      await _save([
+        for (final r in state)
+          if (byId[r.id] != null) r.copyWith(status: byId[r.id]) else r,
+      ]);
+    } catch (_) {}
   }
 
   Future<void> cancel(String id) => _save([

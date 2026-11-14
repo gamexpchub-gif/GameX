@@ -1,50 +1,56 @@
 import { useMemo, useState } from 'react';
 import { Ban, Crown, Mail, MapPin, Phone, Users } from 'lucide-react';
-import { Customer, fmtDate, fmtDateTime, inr, log, update, useDB } from '../store';
-import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, Td, Th } from '../ui';
-import { cap, orderTone } from '../status';
+import { act, ago, fmtDate, fmtDateTime, inr, isRevenue, useDB } from '../store';
+import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, Td, Th, toast } from '../ui';
+import { orderLabel, orderTone } from '../status';
 
+type Tier = 'Silver' | 'Gold' | 'Platinum';
 const tierTone = { Silver: 'slate', Gold: 'amber', Platinum: 'violet' } as const;
 
 export default function Customers() {
   const customers = useDB((d) => d.customers);
   const orders = useDB((d) => d.orders);
+  const live = useDB((d) => d.live);
   const [q, setQ] = useState('');
-  const [tab, setTab] = useState<'all' | 'Platinum' | 'Gold' | 'blocked'>('all');
+  const [tab, setTab] = useState<'all' | 'Platinum' | 'Gold' | 'new' | 'blocked'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
-  const open = customers.find((c) => c.id === openId) ?? null;
 
-  const list = useMemo(
+  const rows = useMemo(
     () =>
-      customers
-        .filter(
-          (c) =>
-            (tab === 'all' || (tab === 'blocked' ? c.status === 'blocked' : c.tier === tab)) &&
-            `${c.name} ${c.email} ${c.phone} ${c.city}`.toLowerCase().includes(q.toLowerCase()),
-        )
-        .sort((a, b) => b.spent - a.spent),
-    [customers, q, tab],
+      customers.map((c) => {
+        const mine = orders.filter((o) => o.customerId === c.id);
+        const spent = mine.filter(isRevenue).reduce((s, o) => s + o.price, 0);
+        const tier: Tier = spent > 150000 ? 'Platinum' : spent > 60000 ? 'Gold' : 'Silver';
+        return { ...c, orders: mine.length, spent, tier, isNew: Date.now() - new Date(c.createdAt).getTime() < 7 * 864e5 };
+      }),
+    [customers, orders],
   );
+  const list = rows
+    .filter(
+      (c) =>
+        (tab === 'all' || (tab === 'blocked' ? c.status === 'blocked' : tab === 'new' ? c.isNew : c.tier === tab)) &&
+        `${c.name} ${c.email} ${c.phone} ${c.city}`.toLowerCase().includes(q.toLowerCase()),
+    )
+    .sort((a, b) => b.spent - a.spent);
+  const open = rows.find((c) => c.id === openId) ?? null;
 
-  const toggleBlock = (c: Customer) => {
-    const status = c.status === 'blocked' ? 'active' : 'blocked';
-    update((d) => ({ ...d, customers: d.customers.map((x) => (x.id === c.id ? { ...x, status } : x)) }));
-    log(`${c.name} ${status === 'blocked' ? 'blocked' : 'unblocked'}`, 'customer');
-  };
+  const toggle = (id: string, blocked: boolean, name: string) =>
+    act('PATCH', `/customers/${id}`, { status: blocked ? 'active' : 'blocked' }).then(() => toast(`${name} ${blocked ? 'unblocked' : 'blocked — cannot place orders'}`));
 
   return (
     <>
-      <PageHeader title="Customers" subtitle={`${customers.length} registered buyers across India`} />
+      <PageHeader title="Customers" subtitle={`${customers.length} buyers registered from the GAMEX app`} />
       <Card pad={false}>
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
           <Tabs
             value={tab}
             onChange={setTab}
             items={[
-              { id: 'all', label: 'All', count: customers.length },
-              { id: 'Platinum', label: 'Platinum', count: customers.filter((c) => c.tier === 'Platinum').length },
-              { id: 'Gold', label: 'Gold', count: customers.filter((c) => c.tier === 'Gold').length },
-              { id: 'blocked', label: 'Blocked', count: customers.filter((c) => c.status === 'blocked').length },
+              { id: 'all', label: 'All', count: rows.length },
+              { id: 'new', label: 'New this week', count: rows.filter((c) => c.isNew).length },
+              { id: 'Platinum', label: 'Platinum', count: rows.filter((c) => c.tier === 'Platinum').length },
+              { id: 'Gold', label: 'Gold', count: rows.filter((c) => c.tier === 'Gold').length },
+              { id: 'blocked', label: 'Blocked', count: rows.filter((c) => c.status === 'blocked').length },
             ]}
           />
           <div className="ml-auto">
@@ -52,7 +58,7 @@ export default function Customers() {
           </div>
         </div>
         {list.length === 0 ? (
-          <Empty icon={Users} title="No customers" text="Try another search." />
+          <Empty icon={Users} title="No customers" text="People who sign up in the GAMEX app appear here." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -60,7 +66,6 @@ export default function Customers() {
                 <tr>
                   <Th>Customer</Th>
                   <Th>Phone</Th>
-                  <Th>City</Th>
                   <Th>Orders</Th>
                   <Th>Lifetime value</Th>
                   <Th>Tier</Th>
@@ -77,16 +82,18 @@ export default function Customers() {
                           {c.name
                             .split(' ')
                             .map((s) => s[0])
+                            .slice(0, 2)
                             .join('')}
                         </div>
                         <div>
-                          <p className="font-semibold">{c.name}</p>
-                          <p className="text-xs text-muted">{c.email}</p>
+                          <p className="font-semibold">
+                            {c.name} {c.isNew && <Badge tone="cyan">New</Badge>}
+                          </p>
+                          <p className="text-xs text-muted">{c.email || c.city}</p>
                         </div>
                       </div>
                     </Td>
-                    <Td>{c.phone}</Td>
-                    <Td>{c.city}</Td>
+                    <Td>{c.phone || '—'}</Td>
                     <Td className="font-semibold">{c.orders}</Td>
                     <Td className="font-bold">{inr(c.spent)}</Td>
                     <Td>
@@ -94,10 +101,10 @@ export default function Customers() {
                         {c.tier === 'Platinum' && <Crown size={11} />} {c.tier}
                       </Badge>
                     </Td>
-                    <Td className="text-muted">{fmtDate(c.joinedAt)}</Td>
+                    <Td className="text-muted">{fmtDate(c.createdAt)}</Td>
                     <Td>
                       <Badge tone={c.status === 'active' ? 'green' : 'red'} dot>
-                        {cap(c.status)}
+                        {c.status === 'active' ? 'Active' : 'Blocked'}
                       </Badge>
                     </Td>
                   </tr>
@@ -114,7 +121,7 @@ export default function Customers() {
         title="Customer profile"
         footer={
           open && (
-            <Button variant={open.status === 'blocked' ? 'secondary' : 'danger'} icon={Ban} onClick={() => toggleBlock(open)}>
+            <Button variant={open.status === 'blocked' ? 'secondary' : 'danger'} icon={Ban} onClick={() => toggle(open.id, open.status === 'blocked', open.name)}>
               {open.status === 'blocked' ? 'Unblock customer' : 'Block customer'}
             </Button>
           )
@@ -127,6 +134,7 @@ export default function Customers() {
                 {open.name
                   .split(' ')
                   .map((s) => s[0])
+                  .slice(0, 2)
                   .join('')}
               </div>
               <div>
@@ -138,7 +146,7 @@ export default function Customers() {
               {[
                 ['Orders', String(open.orders)],
                 ['Spent', inr(open.spent)],
-                ['Since', fmtDate(open.joinedAt)],
+                ['Live views', String(live.filter((l) => (l as { customerId?: string }).customerId === open.id).length)],
               ].map(([l, v]) => (
                 <div key={l} className="rounded-2xl bg-slate-50 p-3">
                   <p className="text-xs text-muted">{l}</p>
@@ -148,14 +156,15 @@ export default function Customers() {
             </div>
             <div className="space-y-2 rounded-2xl border border-slate-200 p-4 text-sm text-muted">
               <p className="flex items-center gap-2">
-                <Mail size={14} /> {open.email}
+                <Mail size={14} /> {open.email || '—'}
               </p>
               <p className="flex items-center gap-2">
-                <Phone size={14} /> {open.phone}
+                <Phone size={14} /> {open.phone || '—'}
               </p>
               <p className="flex items-center gap-2">
-                <MapPin size={14} /> {open.city}, India
+                <MapPin size={14} /> {open.city || '—'}
               </p>
+              <p>Joined {fmtDate(open.createdAt)} ({ago(open.createdAt)})</p>
             </div>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Order history</p>
@@ -164,16 +173,17 @@ export default function Customers() {
                   .filter((o) => o.customerId === open.id)
                   .map((o) => (
                     <div key={o.id} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
-                      <img src={o.image} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
+                      <img src={o.photo} alt="" className="h-10 w-10 rounded-lg bg-slate-50 object-contain" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{o.product}</p>
+                        <p className="truncate text-sm font-semibold">{o.item}</p>
                         <p className="text-xs text-muted">
-                          {o.id} • {fmtDateTime(o.createdAt)}
+                          {o.id} • {fmtDateTime(o.placedAt)}
                         </p>
                       </div>
-                      <Badge tone={orderTone[o.status]}>{cap(o.status)}</Badge>
+                      <Badge tone={orderTone[o.stage]}>{orderLabel[o.stage]}</Badge>
                     </div>
                   ))}
+                {open.orders === 0 && <p className="text-sm text-muted">No orders yet.</p>}
               </div>
             </div>
           </div>

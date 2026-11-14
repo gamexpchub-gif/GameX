@@ -1,13 +1,42 @@
+import 'dart:math' as math;
+
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/format.dart';
+import '../../core/server_sheet.dart';
+import '../../core/storage.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/store.dart';
 import '../orders/orders_screen.dart' show OrderTile;
+
+const _kGoal = 'monthly_goal_v1';
+
+/// Monthly sales target the seller sets for themselves.
+class GoalNotifier extends Notifier<int> {
+  @override
+  int build() =>
+      ref.read(localStoreProvider).readJson(_kGoal, (j) => j as int) ?? 500000;
+
+  void set(int v) {
+    state = v;
+    ref.read(localStoreProvider).writeJson(_kGoal, v);
+  }
+}
+
+final goalProvider = NotifierProvider<GoalNotifier, int>(GoalNotifier.new);
+
+/// Seller level by 30-day sales.
+const _levels = [
+  ('Bronze', 0, Color(0xFFB7791F)),
+  ('Silver', 200000, Color(0xFF64748B)),
+  ('Gold', 500000, Color(0xFFD69E2E)),
+  ('Platinum', 1500000, Color(0xFF6A3DF5)),
+];
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -15,218 +44,240 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final seller = ref.watch(sellerProvider);
-    final orders = ref.watch(ordersProvider);
-    final listings = ref.watch(listingsProvider);
-    final live = ref.watch(liveProvider);
+    final data = ref.watch(syncProvider);
     final earn = ref.watch(earningsProvider);
     if (seller == null) return const SizedBox.shrink();
 
+    final orders = data.orders;
+    final listings = data.listings;
     final now = DateTime.now();
-    bool sameDay(DateTime d) =>
-        d.year == now.year && d.month == now.month && d.day == now.day;
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
     final counted = orders.where(
       (o) => o.stage != OrderStage.cancelled && o.stage != OrderStage.returned,
     );
     final todaySales = counted
-        .where((o) => sameDay(o.placedAt))
+        .where((o) => sameDay(o.placedAt, now))
+        .fold<int>(0, (s, o) => s + o.price);
+    final yesterdaySales = counted
+        .where(
+          (o) => sameDay(o.placedAt, now.subtract(const Duration(days: 1))),
+        )
         .fold<int>(0, (s, o) => s + o.price);
     final newOrders = orders
         .where((o) => o.stage == OrderStage.newOrder)
-        .toList();
-    final toShip = orders
-        .where(
-          (o) => o.stage == OrderStage.accepted || o.stage == OrderStage.packed,
-        )
         .length;
-    final active = listings
-        .where((l) => l.status == ListingStatus.active)
-        .length;
+    final toPack = orders.where((o) => o.stage == OrderStage.accepted).length;
+    final toShip = orders.where((o) => o.stage == OrderStage.packed).length;
+    final active = listings.where((l) => l.status == ListingStatus.active);
     final views = listings.fold<int>(0, (s, l) => s + l.views);
-    final pendingLive = live.where((c) => c.stage == LiveStage.pending).length;
-    final lowStock = listings.where((l) => l.lowStock).toList();
-
-    final week = List.generate(7, (i) {
-      final d = DateTime(now.year, now.month, now.day - (6 - i));
-      return (
-        d,
-        counted
-            .where(
-              (o) =>
-                  o.placedAt.year == d.year &&
-                  o.placedAt.month == d.month &&
-                  o.placedAt.day == d.day,
-            )
-            .fold<int>(0, (s, o) => s + o.price),
-      );
-    });
+    final pendingLive = data.live
+        .where((c) => c.stage == LiveStage.pending)
+        .length;
+    final liveToday = data.live
+        .where((c) => c.stage == LiveStage.confirmed && sameDay(c.slot, now))
+        .length;
+    final inReview = listings
+        .where((l) => l.status == ListingStatus.inReview)
+        .toList();
+    final rejected = listings
+        .where((l) => l.status == ListingStatus.rejected)
+        .toList();
+    final unread = data.notices.where((n) => !n.read).length;
+    final announcements = data.notices.where((n) => n.isAnnouncement).toList();
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _Header(seller: seller, available: earn.available),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            sliver: SliverList.list(
-              children: [
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.45,
-                  children: [
-                    _Kpi(
-                      icon: Icons.currency_rupee_rounded,
-                      color: C.primary,
-                      label: "Today's sales",
-                      value: inrShort(todaySales),
-                      onTap: () => context.go('/earnings'),
-                    ),
-                    _Kpi(
-                      icon: Icons.local_shipping_rounded,
-                      color: C.violet,
-                      label: 'Orders to ship',
-                      value: '$toShip',
-                      onTap: () => context.go('/orders?tab=ship'),
-                    ),
-                    _Kpi(
-                      icon: Icons.inventory_2_rounded,
-                      color: C.green,
-                      label: 'Active listings',
-                      value: '$active',
-                      onTap: () => context.go('/listings'),
-                    ),
-                    _Kpi(
-                      icon: Icons.visibility_rounded,
-                      color: C.amber,
-                      label: 'Store views (30d)',
-                      value: views >= 1000
-                          ? '${(views / 1000).toStringAsFixed(1)}K'
-                          : '$views',
-                    ),
-                  ],
-                ),
-                if (newOrders.isNotEmpty ||
-                    pendingLive > 0 ||
-                    lowStock.isNotEmpty) ...[
-                  const SectionTitle('Needs your attention'),
-                  Panel(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      children: [
-                        for (final o in newOrders)
-                          _Alert(
-                            icon: Icons.notifications_active_rounded,
-                            color: C.amber,
-                            title: 'New order ${o.id} • ${inr(o.price)}',
-                            subtitle: timeLeft(o.slaDeadline) == null
-                                ? 'Acceptance time passed — act now'
-                                : 'Accept within ${timeLeft(o.slaDeadline)}',
-                            onTap: () => context.push('/order/${o.id}'),
-                          ),
-                        if (pendingLive > 0)
-                          _Alert(
-                            icon: Icons.videocam_rounded,
-                            color: C.red,
-                            title:
-                                '$pendingLive live review request${pendingLive > 1 ? 's' : ''}',
-                            subtitle: 'Buyers want to see the phone live',
-                            onTap: () => context.push('/live'),
-                          ),
-                        for (final l in lowStock.take(2))
-                          _Alert(
-                            icon: Icons.inventory_rounded,
-                            color: C.violet,
-                            title: '${l.title} — ${l.stock} left',
-                            subtitle: 'Restock to keep the listing live',
-                            onTap: () => context.push('/listing/${l.id}'),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SectionTitle('Sales this week'),
-                Panel(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            inr(week.fold<int>(0, (s, d) => s + d.$2)),
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const Spacer(),
-                          Pill(
-                            '${earn.ordersMonth} orders / 30d',
-                            color: C.green,
-                            icon: Icons.trending_up_rounded,
-                          ),
-                        ],
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(syncProvider.notifier).refresh(),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: _Header(
+                seller: seller,
+                data: data,
+                available: earn.available,
+                unread: unread,
+                todaySales: todaySales,
+                yesterdaySales: yesterdaySales,
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+              sliver: SliverList.list(
+                children: [
+                  if (data.error != null) _OfflineBanner(error: data.error!),
+                  if (seller.status != SellerStatus.approved)
+                    _AccountBanner(seller: seller),
+                  _TodayTasks(
+                    tasks: [
+                      _Task(
+                        Icons.notifications_active_rounded,
+                        C.amber,
+                        'Accept new orders',
+                        newOrders,
+                        () => context.go('/orders?tab=new'),
                       ),
-                      const SizedBox(height: 16),
-                      SizedBox(height: 150, child: _WeekBars(week: week)),
+                      _Task(
+                        Icons.inventory_rounded,
+                        C.primary,
+                        'Verify IMEI & pack',
+                        toPack,
+                        () => context.go('/orders?tab=ship'),
+                      ),
+                      _Task(
+                        Icons.local_shipping_rounded,
+                        C.violet,
+                        'Book courier pickup',
+                        toShip,
+                        () => context.go('/orders?tab=ship'),
+                      ),
+                      _Task(
+                        Icons.videocam_rounded,
+                        C.red,
+                        'Live review requests',
+                        pendingLive + liveToday,
+                        () => context.push('/live'),
+                      ),
+                      _Task(
+                        Icons.edit_note_rounded,
+                        C.cyan,
+                        'Fix rejected listings',
+                        rejected.length,
+                        () => context.go('/listings'),
+                      ),
                     ],
                   ),
-                ),
-                const SectionTitle('Quick actions'),
-                Row(
-                  children: [
-                    _Quick(
-                      icon: Icons.add_box_rounded,
-                      label: 'Add\nlisting',
-                      color: C.primary,
-                      onTap: () => context.push('/listing/new'),
-                    ),
-                    _Quick(
-                      icon: Icons.videocam_rounded,
-                      label: 'Live\nreviews',
-                      color: C.red,
-                      badge: pendingLive,
-                      onTap: () => context.push('/live'),
-                    ),
-                    _Quick(
-                      icon: Icons.qr_code_scanner_rounded,
-                      label: 'Pack\norders',
-                      color: C.violet,
-                      onTap: () => context.go('/orders?tab=ship'),
-                    ),
-                    _Quick(
-                      icon: Icons.account_balance_rounded,
-                      label: 'Get\npaid',
-                      color: C.green,
-                      onTap: () => context.go('/earnings'),
-                    ),
+                  const SizedBox(height: 12),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.5,
+                    children: [
+                      _Kpi(
+                        icon: Icons.receipt_long_rounded,
+                        color: C.primary,
+                        label: 'Orders (30d)',
+                        value: '${earn.ordersMonth}',
+                        onTap: () => context.go('/orders'),
+                      ),
+                      _Kpi(
+                        icon: Icons.inventory_2_rounded,
+                        color: C.green,
+                        label: 'Live listings',
+                        value: '${active.length}',
+                        onTap: () => context.go('/listings'),
+                      ),
+                      _Kpi(
+                        icon: Icons.visibility_rounded,
+                        color: C.amber,
+                        label: 'Store views',
+                        value: views >= 1000
+                            ? '${(views / 1000).toStringAsFixed(1)}K'
+                            : '$views',
+                      ),
+                      _Kpi(
+                        icon: Icons.percent_rounded,
+                        color: C.violet,
+                        label: 'View → order',
+                        value: views == 0
+                            ? '0%'
+                            : '${(earn.ordersMonth * 100 / views).toStringAsFixed(1)}%',
+                      ),
+                    ],
+                  ),
+                  if (announcements.isNotEmpty) ...[
+                    const SectionTitle('From GAMEX'),
+                    _Announcements(items: announcements),
                   ],
-                ),
-                SectionTitle(
-                  'Recent orders',
-                  action: 'All orders',
-                  onAction: () => context.go('/orders'),
-                ),
-                for (final o in orders.take(3)) ...[
-                  OrderTile(order: o),
-                  const SizedBox(height: 10),
+                  const SectionTitle('Sales'),
+                  _SalesCard(orders: counted.toList()),
+                  const SectionTitle('Growth'),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _GoalCard(month: _monthSales(counted, now)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: _LevelCard(gmv30: earn.grossMonth)),
+                    ],
+                  ),
+                  if (inReview.isNotEmpty || rejected.isNotEmpty) ...[
+                    SectionTitle(
+                      'Quality check',
+                      action: 'Listings',
+                      onAction: () => context.go('/listings'),
+                    ),
+                    _QcCard(inReview: inReview, rejected: rejected),
+                  ],
+                  const SectionTitle('Quick actions'),
+                  const _QuickGrid(),
+                  if (active.isNotEmpty) ...[
+                    const SectionTitle('Top listings'),
+                    _TopListings(listings: active.toList()),
+                  ],
+                  const SectionTitle('Inventory health'),
+                  _InventoryHealth(listings: listings),
+                  if (data.insights.demand.isNotEmpty ||
+                      data.insights.pricing.isNotEmpty) ...[
+                    const SectionTitle('Market insights'),
+                    _Insights(insights: data.insights),
+                  ],
+                  SectionTitle(
+                    'Recent orders',
+                    action: 'All orders',
+                    onAction: () => context.go('/orders'),
+                  ),
+                  if (orders.isEmpty)
+                    const Panel(
+                      child: EmptyView(
+                        icon: Icons.receipt_long_rounded,
+                        title: 'No orders yet',
+                        text: 'Approved listings appear in the GAMEX app. Orders will show up here.',
+                      ),
+                    ),
+                  for (final o in orders.take(3)) ...[
+                    OrderTile(order: o),
+                    const SizedBox(height: 10),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  static int _monthSales(Iterable<SellerOrder> orders, DateTime now) => orders
+      .where(
+        (o) => o.placedAt.year == now.year && o.placedAt.month == now.month,
+      )
+      .fold<int>(0, (s, o) => s + o.price);
 }
 
+// ------------------------------------------------------------------ header
+
 class _Header extends ConsumerWidget {
-  const _Header({required this.seller, required this.available});
+  const _Header({
+    required this.seller,
+    required this.data,
+    required this.available,
+    required this.unread,
+    required this.todaySales,
+    required this.yesterdaySales,
+  });
   final Seller seller;
+  final SellerData data;
   final double available;
+  final int unread;
+  final int todaySales;
+  final int yesterdaySales;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -236,15 +287,18 @@ class _Header extends ConsumerWidget {
         : hour < 17
         ? 'Good afternoon'
         : 'Good evening';
+    final change = yesterdaySales == 0
+        ? null
+        : (todaySales - yesterdaySales) * 100 / yesterdaySales;
     return Container(
       decoration: const BoxDecoration(
         gradient: C.nightGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
       ),
       padding: EdgeInsets.fromLTRB(
         18,
-        MediaQuery.paddingOf(context).top + 14,
-        18,
+        MediaQuery.paddingOf(context).top + 12,
+        12,
         20,
       ),
       child: Column(
@@ -296,36 +350,46 @@ class _Header extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(
-                          Icons.verified_rounded,
-                          color: Color(0xFF5CB8FF),
-                          size: 18,
-                        ),
+                        if (seller.status == SellerStatus.approved) ...[
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.verified_rounded,
+                            color: Color(0xFF5CB8FF),
+                            size: 18,
+                          ),
+                        ],
                       ],
                     ),
                   ],
                 ),
               ),
               _OnlineSwitch(seller: seller),
+              IconButton(
+                onPressed: () => _showNotices(context, ref),
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text('$unread'),
+                  backgroundColor: C.red,
+                  child: const Icon(
+                    Icons.notifications_none_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white12),
-            ),
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Ready to withdraw',
+                        "Today's sales",
                         style: TextStyle(
                           color: Color(0xFFB9C2FF),
                           fontSize: 12.5,
@@ -333,26 +397,61 @@ class _Header extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        inr(available),
+                        inr(todaySales),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 30,
                           fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        change == null
+                            ? 'vs ${inr(yesterdaySales)} yesterday'
+                            : '${change >= 0 ? '▲' : '▼'} ${change.abs().toStringAsFixed(0)}% vs yesterday',
+                        style: TextStyle(
+                          color: change == null
+                              ? Colors.white60
+                              : change >= 0
+                              ? const Color(0xFF4ADE80)
+                              : const Color(0xFFFF8A8A),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
                 ),
-                _HeaderStat(
-                  icon: Icons.star_rounded,
-                  value: seller.rating.toStringAsFixed(1),
-                  label: 'Rating',
+                _SyncChip(data: data),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Row(
+              children: [
+                _HeaderTile(
+                  label: 'Withdrawable',
+                  value: inrShort(available),
+                  icon: Icons.account_balance_wallet_rounded,
+                  onTap: () => context.go('/earnings'),
                 ),
-                const SizedBox(width: 14),
-                const _HeaderStat(
-                  icon: Icons.bolt_rounded,
-                  value: '98%',
-                  label: 'On-time',
+                const SizedBox(width: 8),
+                _HeaderTile(
+                  label: 'Rating',
+                  value: seller.rating == 0
+                      ? 'New'
+                      : seller.rating.toStringAsFixed(1),
+                  icon: Icons.star_rounded,
+                ),
+                const SizedBox(width: 8),
+                _HeaderTile(
+                  label: 'Payout',
+                  value: _nextMonday(),
+                  icon: Icons.event_available_rounded,
+                  onTap: () => context.go('/earnings'),
                 ),
               ],
             ),
@@ -361,41 +460,228 @@ class _Header extends ConsumerWidget {
       ),
     );
   }
+
+  static String _nextMonday() {
+    final n = DateTime.now();
+    final d = (8 - n.weekday) % 7;
+    return dateShort(n.add(Duration(days: d == 0 ? 7 : d)));
+  }
+
+  void _showNotices(BuildContext context, WidgetRef ref) {
+    final notices = ref.read(noticesProvider);
+    if (notices.any((n) => !n.read)) {
+      ref.read(syncProvider.notifier).markNoticesRead().ignore();
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        maxChildSize: 0.92,
+        builder: (_, scroll) => Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Notifications',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: notices.isEmpty
+                  ? const EmptyView(
+                      icon: Icons.notifications_off_outlined,
+                      title: 'All caught up',
+                      text: 'Order, QC and payout alerts appear here.',
+                    )
+                  : ListView.separated(
+                      controller: scroll,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: notices.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final n = notices[i];
+                        final (icon, color) = _noticeStyle(n.kind);
+                        return Panel(
+                          padding: const EdgeInsets.all(12),
+                          color: n.read
+                              ? Colors.white
+                              : C.primary.withValues(alpha: 0.04),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(icon, color: color, size: 19),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      n.title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    if (n.body.isNotEmpty)
+                                      Text(
+                                        n.body,
+                                        style: const TextStyle(
+                                          color: C.muted,
+                                          fontSize: 13,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      ago(n.at),
+                                      style: const TextStyle(
+                                        color: C.faint,
+                                        fontSize: 11.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _HeaderStat extends StatelessWidget {
-  const _HeaderStat({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-  final IconData icon;
-  final String value;
-  final String label;
+(IconData, Color) _noticeStyle(String kind) => switch (kind) {
+  'order' => (Icons.receipt_long_rounded, C.primary),
+  'live' => (Icons.videocam_rounded, C.red),
+  'qc' => (Icons.verified_rounded, C.green),
+  'payout' => (Icons.payments_rounded, C.green),
+  'account' => (Icons.badge_rounded, C.violet),
+  'promo' => (Icons.local_offer_rounded, C.amber),
+  'feature' => (Icons.auto_awesome_rounded, C.violet),
+  'announcement' => (Icons.campaign_rounded, C.cyan),
+  _ => (Icons.info_outline_rounded, C.muted),
+};
+
+class _SyncChip extends ConsumerWidget {
+  const _SyncChip({required this.data});
+  final SellerData data;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ok = data.error == null && data.loaded;
+    return GestureDetector(
+      onTap: () => ok
+          ? ref.read(syncProvider.notifier).refresh()
+          : showServerSheet(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFFFFC542), size: 16),
-            const SizedBox(width: 3),
+            if (data.syncing)
+              const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.6,
+                  color: Colors.white,
+                ),
+              )
+            else
+              Icon(
+                ok ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                size: 14,
+                color: ok ? const Color(0xFF4ADE80) : const Color(0xFFFFB4B4),
+              ),
+            const SizedBox(width: 5),
             Text(
-              value,
+              data.syncing
+                  ? 'Syncing'
+                  : ok
+                  ? 'Synced ${ago(data.syncedAt!)}'
+                  : 'Offline',
               style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
+                color: Colors.white70,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFFB9C2FF), fontSize: 11.5),
+      ),
+    );
+  }
+}
+
+class _HeaderTile extends StatelessWidget {
+  const _HeaderTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.onTap,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 17, color: const Color(0xFFFFC542)),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15.5,
+                ),
+              ),
+              Text(
+                label,
+                style: const TextStyle(color: Color(0xFFB9C2FF), fontSize: 11),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -406,49 +692,235 @@ class _OnlineSwitch extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final c = seller.online ? C.green : C.amber;
     return GestureDetector(
-      onTap: () {
-        ref
-            .read(sellerProvider.notifier)
-            .save(seller.copyWith(online: !seller.online));
-        snack(
-          context,
-          seller.online
-              ? 'Store on holiday — listings hidden from buyers'
-              : 'Store is live again',
-          icon: seller.online ? Icons.beach_access_rounded : null,
-        );
-      },
+      onTap: () => runAction(
+        context,
+        () => ref
+            .read(syncProvider.notifier)
+            .updateSeller(seller.copyWith(online: !seller.online)),
+        done: seller.online
+            ? 'Holiday mode — listings hidden from buyers'
+            : 'Store is live again',
+        icon: seller.online ? Icons.beach_access_rounded : null,
+      ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: (seller.online ? C.green : C.amber).withValues(alpha: 0.18),
+          color: c.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: (seller.online ? C.green : C.amber).withValues(alpha: 0.5),
-          ),
+          border: Border.all(color: c.withValues(alpha: 0.5)),
         ),
         child: Row(
           children: [
             Container(
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               decoration: BoxDecoration(
                 color: seller.online ? const Color(0xFF4ADE80) : C.amber,
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Text(
               seller.online ? 'Online' : 'Holiday',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 12.5,
+                fontSize: 12,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------ banners
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Panel(
+        color: C.red.withValues(alpha: 0.06),
+        padding: const EdgeInsets.all(12),
+        onTap: () => showServerSheet(context),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: C.red),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$error — showing saved data. Tap to check the server address.',
+                style: const TextStyle(
+                  color: C.red,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountBanner extends StatelessWidget {
+  const _AccountBanner({required this.seller});
+  final Seller seller;
+
+  @override
+  Widget build(BuildContext context) {
+    final suspended = seller.status == SellerStatus.suspended;
+    final c = suspended ? C.red : C.amber;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Panel(
+        color: c.withValues(alpha: 0.07),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(
+              suspended ? Icons.block_rounded : Icons.hourglass_top_rounded,
+              color: c,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suspended ? 'Account suspended' : 'KYC under review',
+                    style: TextStyle(fontWeight: FontWeight.w800, color: c),
+                  ),
+                  Text(
+                    suspended
+                        ? (seller.suspendReason ?? 'Contact seller support.')
+                        : 'Add listings now — they go live once GAMEX approves your account and each phone passes QC.',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: C.ink,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------ tasks
+
+class _Task {
+  const _Task(this.icon, this.color, this.label, this.count, this.onTap);
+  final IconData icon;
+  final Color color;
+  final String label;
+  final int count;
+  final VoidCallback onTap;
+}
+
+class _TodayTasks extends StatelessWidget {
+  const _TodayTasks({required this.tasks});
+  final List<_Task> tasks;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = tasks.where((t) => t.count > 0).toList();
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                "Today's to-do",
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+              const SizedBox(width: 8),
+              Pill(
+                open.isEmpty
+                    ? 'All done'
+                    : '${open.fold<int>(0, (s, t) => s + t.count)} pending',
+                color: open.isEmpty ? C.green : C.amber,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (open.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.celebration_rounded, color: C.green),
+                  SizedBox(width: 10),
+                  Text(
+                    'Nothing pending. Great job!',
+                    style: TextStyle(color: C.muted),
+                  ),
+                ],
+              ),
+            ),
+          for (final t in open)
+            InkWell(
+              onTap: t.onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: t.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(t.icon, color: t.color, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        t.label,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: t.color,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${t.count}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: C.faint),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -477,19 +949,19 @@ class _Kpi extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: color, size: 19),
           ),
           const Spacer(),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
               color: C.ink,
             ),
@@ -506,126 +978,172 @@ class _Kpi extends StatelessWidget {
   }
 }
 
-class _Alert extends StatelessWidget {
-  const _Alert({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+// ------------------------------------------------------------------ announcements
+
+class _Announcements extends StatelessWidget {
+  const _Announcements({required this.items});
+  final List<Notice> items;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          color: color,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded, color: C.faint),
-    );
-  }
-}
-
-class _Quick extends StatelessWidget {
-  const _Quick({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.badge = 0,
-  });
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  final int badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          children: [
-            Badge(
-              isLabelVisible: badge > 0,
-              label: Text('$badge'),
-              backgroundColor: C.red,
-              child: Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: C.border),
+    const gradients = [
+      [Color(0xFF1F5BFF), Color(0xFF6A3DF5)],
+      [Color(0xFFF59E0B), Color(0xFFEC4899)],
+      [Color(0xFF0891B2), Color(0xFF16A34A)],
+    ];
+    return SizedBox(
+      height: 118,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final n = items[i];
+          final (icon, _) = _noticeStyle(n.kind);
+          return Container(
+            width: MediaQuery.sizeOf(context).width * 0.78,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: gradients[i % gradients.length]),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 26),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        n.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        n.body,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Icon(icon, color: color, size: 26),
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: C.ink,
-                height: 1.2,
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _WeekBars extends StatelessWidget {
-  const _WeekBars({required this.week});
-  final List<(DateTime, int)> week;
+// ------------------------------------------------------------------ sales chart
+
+class _SalesCard extends StatefulWidget {
+  const _SalesCard({required this.orders});
+  final List<SellerOrder> orders;
+
+  @override
+  State<_SalesCard> createState() => _SalesCardState();
+}
+
+class _SalesCardState extends State<_SalesCard> {
+  int _days = 7;
 
   @override
   Widget build(BuildContext context) {
-    final max = week.fold<int>(1, (m, d) => d.$2 > m ? d.$2 : m);
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final now = DateTime.now();
+    final days = List.generate(_days, (i) {
+      final d = DateTime(now.year, now.month, now.day - (_days - 1 - i));
+      final list = widget.orders.where(
+        (o) =>
+            o.placedAt.year == d.year &&
+            o.placedAt.month == d.month &&
+            o.placedAt.day == d.day,
+      );
+      return (d, list.fold<int>(0, (s, o) => s + o.price), list.length);
+    });
+    final total = days.fold<int>(0, (s, d) => s + d.$2);
+    final count = days.fold<int>(0, (s, d) => s + d.$3);
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      inr(total),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      '$count orders • avg ${inr(count == 0 ? 0 : total ~/ count)}',
+                      style: const TextStyle(color: C.muted, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(value: 7, label: Text('7D')),
+                  ButtonSegment(value: 30, label: Text('30D')),
+                ],
+                selected: {_days},
+                onSelectionChanged: (s) => setState(() => _days = s.first),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 150,
+            child: _Bars(days: days, labelEvery: _days == 7 ? 1 : 5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bars extends StatelessWidget {
+  const _Bars({required this.days, required this.labelEvery});
+  final List<(DateTime, int, int)> days;
+  final int labelEvery;
+
+  @override
+  Widget build(BuildContext context) {
+    final max = days.fold<int>(1, (m, d) => math.max(m, d.$2));
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        for (var i = 0; i < week.length; i++)
+        for (var i = 0; i < days.length; i++)
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (week[i].$2 > 0)
+                if (labelEvery == 1 && days[i].$2 > 0)
                   Text(
-                    inrShort(week[i].$2).replaceAll('₹', ''),
+                    inrShort(days[i].$2).replaceAll('₹', ''),
                     style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -634,10 +1152,12 @@ class _WeekBars extends StatelessWidget {
                   ),
                 const SizedBox(height: 4),
                 Container(
-                  height: 6 + 96 * week[i].$2 / max,
-                  margin: const EdgeInsets.symmetric(horizontal: 7),
+                  height: 5 + 100 * days[i].$2 / max,
+                  margin: EdgeInsets.symmetric(
+                    horizontal: labelEvery == 1 ? 7 : 1.5,
+                  ),
                   decoration: BoxDecoration(
-                    gradient: i == week.length - 1
+                    gradient: i == days.length - 1
                         ? C.brandGradient
                         : LinearGradient(
                             colors: [
@@ -647,24 +1167,687 @@ class _WeekBars extends StatelessWidget {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                           ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(
+                      labelEvery == 1 ? 8 : 3,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
+                SizedBox(
+                  height: 14,
+                  child: (days.length - 1 - i) % labelEvery == 0
+                      ? Text(
+                          i == days.length - 1
+                              ? 'Today'
+                              : labelEvery == 1
+                              ? wd[days[i].$1.weekday - 1]
+                              : '${days[i].$1.day}',
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: i == days.length - 1
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                            color: i == days.length - 1 ? C.primary : C.muted,
+                          ),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ------------------------------------------------------------------ growth
+
+class _GoalCard extends ConsumerWidget {
+  const _GoalCard({required this.month});
+  final int month;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goal = ref.watch(goalProvider);
+    final p = (month / goal).clamp(0.0, 1.0);
+    return Panel(
+      onTap: () => _edit(context, ref, goal),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Monthly goal',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Icon(Icons.edit_rounded, size: 15, color: C.faint),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: SizedBox(
+              width: 88,
+              height: 88,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: p,
+                    strokeWidth: 9,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: C.border,
+                    color: p >= 1 ? C.green : C.primary,
+                  ),
+                  Center(
+                    child: Text(
+                      '${(p * 100).round()}%',
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            inrShort(month),
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          Text(
+            'of ${inrShort(goal)} this month',
+            style: const TextStyle(color: C.muted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, int goal) async {
+    final c = TextEditingController(text: '$goal');
+    final v = await showDialog<int>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Monthly sales goal'),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(prefixText: '₹ '),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, int.tryParse(c.text)),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (v != null && v > 0) ref.read(goalProvider.notifier).set(v);
+  }
+}
+
+class _LevelCard extends StatelessWidget {
+  const _LevelCard({required this.gmv30});
+  final double gmv30;
+
+  @override
+  Widget build(BuildContext context) {
+    var idx = 0;
+    for (var i = 0; i < _levels.length; i++) {
+      if (gmv30 >= _levels[i].$2) idx = i;
+    }
+    final cur = _levels[idx];
+    final next = idx + 1 < _levels.length ? _levels[idx + 1] : null;
+    final p = next == null
+        ? 1.0
+        : ((gmv30 - cur.$2) / (next.$2 - cur.$2)).clamp(0.0, 1.0);
+    return Panel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Seller level',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [cur.$3, cur.$3.withValues(alpha: 0.6)],
+              ),
+            ),
+            child: const Icon(
+              Icons.workspace_premium_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            cur.$1,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: cur.$3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: p,
+              minHeight: 7,
+              backgroundColor: C.border,
+              color: cur.$3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            next == null
+                ? 'Top level reached'
+                : '${inrShort(next.$2 - gmv30)} more to ${next.$1}',
+            style: const TextStyle(color: C.muted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------ QC
+
+class _QcCard extends StatelessWidget {
+  const _QcCard({required this.inReview, required this.rejected});
+  final List<Listing> inReview;
+  final List<Listing> rejected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (final l in [...rejected, ...inReview].take(4))
+            ListTile(
+              onTap: () => context.push('/listing/${l.id}'),
+              leading: Photo(
+                l.photos.isEmpty ? '' : l.photos.first,
+                size: 46,
+                radius: 12,
+              ),
+              title: Text(
+                l.title,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                l.status == ListingStatus.rejected
+                    ? (l.rejectReason ?? 'Needs changes')
+                    : 'GAMEX team is checking photos, IMEI & price',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: l.status == ListingStatus.rejected ? C.red : C.muted,
+                ),
+              ),
+              trailing: l.status == ListingStatus.rejected
+                  ? const Pill('Fix', color: C.red, icon: Icons.edit_rounded)
+                  : const Pill('In review', color: C.amber),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickGrid extends ConsumerWidget {
+  const _QuickGrid();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pendingLive = ref
+        .watch(liveProvider)
+        .where((c) => c.stage == LiveStage.pending)
+        .length;
+    final items = [
+      (
+        Icons.add_box_rounded,
+        'Add\nlisting',
+        C.primary,
+        () => context.push('/listing/new'),
+        0,
+      ),
+      (
+        Icons.videocam_rounded,
+        'Live\nreviews',
+        C.red,
+        () => context.push('/live'),
+        pendingLive,
+      ),
+      (
+        Icons.qr_code_scanner_rounded,
+        'Pack\norders',
+        C.violet,
+        () => context.go('/orders?tab=ship'),
+        0,
+      ),
+      (
+        Icons.account_balance_rounded,
+        'Get\npaid',
+        C.green,
+        () => context.go('/earnings'),
+        0,
+      ),
+      (
+        Icons.local_shipping_rounded,
+        'Track\nshipments',
+        C.cyan,
+        () => context.go('/orders?tab=transit'),
+        0,
+      ),
+      (
+        Icons.assignment_return_rounded,
+        'Returns',
+        C.amber,
+        () => context.go('/orders?tab=issues'),
+        0,
+      ),
+      (
+        Icons.storefront_rounded,
+        'My\nstore',
+        C.ink,
+        () => context.go('/account'),
+        0,
+      ),
+      (
+        Icons.support_agent_rounded,
+        'Seller\nsupport',
+        C.muted,
+        () => snack(
+          context,
+          'Call 1800-120-4263 • support@gamex.in',
+          icon: Icons.support_agent_rounded,
+        ),
+        0,
+      ),
+    ];
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 14,
+      childAspectRatio: 0.82,
+      children: [
+        for (final it in items)
+          GestureDetector(
+            onTap: it.$4,
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              children: [
+                Badge(
+                  isLabelVisible: it.$5 > 0,
+                  label: Text('${it.$5}'),
+                  backgroundColor: C.red,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: C.border),
+                    ),
+                    child: Icon(it.$1, color: it.$3, size: 25),
+                  ),
+                ),
+                const SizedBox(height: 7),
                 Text(
-                  i == week.length - 1 ? 'Today' : days[week[i].$1.weekday - 1],
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: i == week.length - 1
-                        ? FontWeight.w800
-                        : FontWeight.w500,
-                    color: i == week.length - 1 ? C.primary : C.muted,
+                  it.$2,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: C.ink,
+                    height: 1.2,
                   ),
                 ),
               ],
             ),
           ),
       ],
+    );
+  }
+}
+
+class _TopListings extends StatelessWidget {
+  const _TopListings({required this.listings});
+  final List<Listing> listings;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = [...listings]
+      ..sort(
+        (a, b) => (b.sold * 100 + b.views).compareTo(a.sold * 100 + a.views),
+      );
+    return SizedBox(
+      height: 190,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: math.min(top.length, 6),
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final l = top[i];
+          return SizedBox(
+            width: 150,
+            child: Panel(
+              onTap: () => context.push('/listing/${l.id}'),
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Photo(
+                        l.photos.isEmpty ? '' : l.photos.first,
+                        size: 130,
+                        radius: 12,
+                        pad: 10,
+                      ),
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: C.ink,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '#${i + 1}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    l.model,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    '${l.views} views • ${l.sold} sold',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: C.muted, fontSize: 11.5),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _InventoryHealth extends StatelessWidget {
+  const _InventoryHealth({required this.listings});
+  final List<Listing> listings;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = listings
+        .where((l) => l.status == ListingStatus.active)
+        .toList();
+    final aging = active.where((l) => l.ageDays >= 30).length;
+    final low = active.where((l) => l.stock <= 1).length;
+    final out = listings.where((l) => l.status == ListingStatus.soldOut).length;
+    final paused = listings
+        .where((l) => l.status == ListingStatus.paused)
+        .length;
+    final healthy = active.length - aging - low;
+    final score = listings.isEmpty
+        ? 100
+        : (math.max(0, healthy) * 100 / math.max(1, active.length)).round();
+    Widget row(IconData i, Color c, String t, int n, String hint) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(i, color: c, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  hint,
+                  style: const TextStyle(color: C.muted, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '$n',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: n == 0 ? C.faint : c,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Panel(
+      onTap: () => context.go('/listings'),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Health score',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '$score/100',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: score >= 70
+                      ? C.green
+                      : score >= 40
+                      ? C.amber
+                      : C.red,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: score / 100,
+              minHeight: 7,
+              backgroundColor: C.border,
+              color: score >= 70
+                  ? C.green
+                  : score >= 40
+                  ? C.amber
+                  : C.red,
+            ),
+          ),
+          const SizedBox(height: 6),
+          row(
+            Icons.hourglass_bottom_rounded,
+            C.amber,
+            'Aging stock',
+            aging,
+            'Listed 30+ days — consider a price drop',
+          ),
+          row(
+            Icons.inventory_rounded,
+            C.violet,
+            'Low stock',
+            low,
+            '1 unit or less left',
+          ),
+          row(
+            Icons.remove_shopping_cart_rounded,
+            C.red,
+            'Sold out',
+            out,
+            'Restock to get back in search',
+          ),
+          row(
+            Icons.pause_circle_outline_rounded,
+            C.muted,
+            'Paused',
+            paused,
+            'Hidden from buyers',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Insights extends StatelessWidget {
+  const _Insights({required this.insights});
+  final Insights insights;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxOrders = insights.demand.fold<int>(
+      1,
+      (m, d) => math.max(m, d.orders),
+    );
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (insights.demand.isNotEmpty) ...[
+            const Row(
+              children: [
+                Icon(
+                  Icons.local_fire_department_rounded,
+                  color: C.red,
+                  size: 19,
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'In demand on GAMEX',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final d in insights.demand)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 130,
+                      child: Text(
+                        d.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: d.orders / maxOrders,
+                          minHeight: 8,
+                          backgroundColor: C.border,
+                          color: C.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${d.orders}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (insights.pricing.isNotEmpty) ...[
+            const Divider(height: 20),
+            const Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, color: C.violet, size: 19),
+                SizedBox(width: 6),
+                Text(
+                  'Price check',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final p in insights.pricing)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                onTap: () => context.push('/listing/${p.id}'),
+                title: Text(
+                  p.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  'Yours ${inr(p.price)} • market avg ${inr(p.market)}',
+                ),
+                trailing: Pill(
+                  p.price > p.market
+                      ? '${((p.price - p.market) * 100 / p.market).round()}% higher'
+                      : '${((p.market - p.price) * 100 / p.market).round()}% lower',
+                  color: p.price > p.market ? C.amber : C.green,
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }

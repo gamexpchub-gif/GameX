@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+
+import 'api.dart';
 
 import '../data/models.dart';
 import 'theme.dart';
@@ -154,8 +157,9 @@ Color gradeColor(Grade g) => switch (g) {
   Grade.fair => C.amber,
 };
 
-/// Phone photo from an `asset:` path or a local file.
-class Photo extends StatelessWidget {
+/// Phone photo: `/img/..` (bundled sample), `/uploads/..` (server),
+/// `asset:..` or a local file path.
+class Photo extends ConsumerWidget {
   const Photo(this.src, {super.key, this.size, this.radius = 14, this.pad = 4});
   final String src;
   final double? size;
@@ -163,17 +167,47 @@ class Photo extends StatelessWidget {
   final double pad;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cache = size == null
         ? null
         : (size! * MediaQuery.devicePixelRatioOf(context)).round();
-    final img = src.startsWith('asset:')
-        ? Image.asset(src.substring(6), fit: BoxFit.contain, cacheWidth: cache)
-        : Image.file(File(src), fit: BoxFit.cover, cacheWidth: cache);
+    final sample = src.startsWith('/img/') || src.startsWith('asset:');
+    Widget fallback(BuildContext _, Object _, StackTrace? _) =>
+        const Center(child: Icon(Icons.smartphone_rounded, color: C.faint));
+    final Widget img;
+    if (src.startsWith('/img/')) {
+      img = Image.asset(
+        'assets/img/${src.substring(5)}',
+        fit: BoxFit.contain,
+        cacheWidth: cache,
+        errorBuilder: fallback,
+      );
+    } else if (src.startsWith('asset:')) {
+      img = Image.asset(
+        src.substring(6),
+        fit: BoxFit.contain,
+        cacheWidth: cache,
+        errorBuilder: fallback,
+      );
+    } else if (src.startsWith('/uploads/') || src.startsWith('http')) {
+      img = Image.network(
+        src.startsWith('http') ? src : ref.read(apiProvider).media(src),
+        fit: BoxFit.cover,
+        cacheWidth: cache,
+        errorBuilder: fallback,
+      );
+    } else {
+      img = Image.file(
+        File(src),
+        fit: BoxFit.cover,
+        cacheWidth: cache,
+        errorBuilder: fallback,
+      );
+    }
     return Container(
       width: size,
       height: size,
-      padding: src.startsWith('asset:') ? EdgeInsets.all(pad) : EdgeInsets.zero,
+      padding: sample ? EdgeInsets.all(pad) : EdgeInsets.zero,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
         gradient: const LinearGradient(
@@ -185,6 +219,25 @@ class Photo extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: img,
     );
+  }
+}
+
+/// Runs a server action, showing [done] on success or the error.
+Future<bool> runAction(
+  BuildContext context,
+  Future<void> Function() action, {
+  String? done,
+  IconData? icon,
+}) async {
+  try {
+    await action();
+    if (done != null && context.mounted) snack(context, done, icon: icon);
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      snack(context, e.toString(), icon: Icons.cloud_off_rounded);
+    }
+    return false;
   }
 }
 

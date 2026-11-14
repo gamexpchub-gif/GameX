@@ -157,7 +157,7 @@ class _CallCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = call;
-    final n = ref.read(liveProvider.notifier);
+    final n = ref.read(syncProvider.notifier);
     final color = switch (c.stage) {
       LiveStage.pending => C.amber,
       LiveStage.confirmed => C.primary,
@@ -230,9 +230,10 @@ class _CallCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => n.patch(
-                      c.id,
-                      (x) => x.copyWith(stage: LiveStage.declined),
+                    onPressed: () => runAction(
+                      context,
+                      () => n.updateLive(c.id, stage: LiveStage.declined),
+                      done: 'Request declined',
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: C.red,
@@ -248,13 +249,11 @@ class _CallCard extends ConsumerWidget {
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 44),
                     ),
-                    onPressed: () {
-                      n.patch(
-                        c.id,
-                        (x) => x.copyWith(stage: LiveStage.confirmed),
-                      );
-                      snack(context, 'Slot confirmed — buyer notified');
-                    },
+                    onPressed: () => runAction(
+                      context,
+                      () => n.updateLive(c.id, stage: LiveStage.confirmed),
+                      done: 'Slot confirmed — buyer notified',
+                    ),
                     icon: const Icon(Icons.check_rounded),
                     label: const Text('Confirm slot'),
                   ),
@@ -277,10 +276,14 @@ class _CallCard extends ConsumerWidget {
                     builder: (_) => _CallRoom(call: c),
                   ),
                 );
-                if (bought == null) return;
-                n.patch(
-                  c.id,
-                  (x) => x.copyWith(stage: LiveStage.done, converted: bought),
+                if (bought == null || !context.mounted) return;
+                await runAction(
+                  context,
+                  () => n.updateLive(
+                    c.id,
+                    stage: LiveStage.done,
+                    converted: bought,
+                  ),
                 );
               },
             ),

@@ -98,6 +98,21 @@ class Order {
 
   double get total => subtotal + deliveryFee - discount;
 
+  /// True when any item was sold by a GAMEX marketplace seller.
+  bool get hasSellerItems => items.any((i) => i.product.id.startsWith('GXL'));
+
+  Order withStatus(OrderStatus s) => Order(
+    id: id,
+    items: items,
+    address: address,
+    paymentMethod: paymentMethod,
+    subtotal: subtotal,
+    deliveryFee: deliveryFee,
+    discount: discount,
+    createdAt: createdAt,
+    status: s,
+  );
+
   /// Expected delivery (4 days after ordering) / actual delivery (2 days).
   DateTime get expectedDelivery => createdAt.add(const Duration(days: 4));
   DateTime get deliveredAt => createdAt.add(const Duration(days: 2));

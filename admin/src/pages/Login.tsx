@@ -1,20 +1,26 @@
 import { useState } from 'react';
 import { Lock, Mail, ShieldCheck } from 'lucide-react';
+import { login } from '../store';
 import { Button, inputCls } from '../ui';
 
-export default function Login({ onLogin }: { onLogin: () => void }) {
+export default function Login() {
   const [email, setEmail] = useState('admin@gamex.in');
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.includes('@')) return setErr('Enter a valid email');
-    if (pass.length < 6) return setErr('Password must be at least 6 characters');
+    if (!pass) return setErr('Enter your password');
     setErr('');
     setBusy(true);
-    setTimeout(onLogin, 600);
+    try {
+      await login(email.trim(), pass);
+    } catch (e) {
+      setErr((e as Error).message);
+      setBusy(false);
+    }
   };
 
   return (
@@ -27,13 +33,13 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             <img src="/img/logo_gamex.png" alt="GAMEX" className="h-7" />
           </div>
           <div>
-            <h1 className="max-w-md text-5xl font-extrabold leading-tight tracking-tight">Run the whole GAMEX store from one place.</h1>
-            <p className="mt-4 max-w-md text-lg text-slate-300">Orders, inventory, live reviews, banners and customers — synced with the mobile app.</p>
+            <h1 className="max-w-md text-5xl font-extrabold leading-tight tracking-tight">Run the whole GAMEX marketplace from one place.</h1>
+            <p className="mt-4 max-w-md text-lg text-slate-300">QC every phone, approve sellers, manage orders and customers — live with the Shop and Seller apps.</p>
             <div className="mt-10 grid max-w-lg grid-cols-3 gap-4">
               {[
-                ['₹1.8Cr', 'GMV this year'],
-                ['12.5K', 'Happy buyers'],
-                ['98%', 'Live review CSAT'],
+                ['QC', 'Every listing checked'],
+                ['KYC', 'Verified sellers only'],
+                ['Live', 'Synced with both apps'],
               ].map(([v, l]) => (
                 <div key={l} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-2xl font-extrabold">{v}</p>
@@ -66,7 +72,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               {busy ? 'Signing in…' : 'Sign in'}
             </Button>
           </div>
-          <p className="mt-6 text-center text-xs text-slate-400">Demo: any email + 6-character password</p>
+          <p className="mt-6 text-center text-xs text-slate-400">Default: admin@gamex.in / gamex@123 (change with ADMIN_PASSWORD)</p>
         </form>
       </div>
     </div>

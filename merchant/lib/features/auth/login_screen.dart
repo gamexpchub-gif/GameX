@@ -2,9 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/server_sheet.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/models.dart';
 import '../../data/store.dart';
 
 const _cities = [
@@ -76,25 +76,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     }
     setState(() => _busy = true);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (_step < 2) {
-      HapticFeedback.lightImpact();
-      setState(() => _step++);
-      return;
-    }
-    await ref
-        .read(sellerProvider.notifier)
-        .signIn(
-          Seller(
-            phone: '+91 ${_phone.text}',
-            ownerName: _owner.text.trim(),
-            storeName: _store.text.trim(),
-            city: _city,
-            gstin: _gst.text.trim().toUpperCase(),
-          ),
+    final auth = ref.read(authApiProvider);
+    try {
+      if (_step == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      } else if (_step == 1) {
+        final existing = await auth.login(_phone.text);
+        if (existing != null) {
+          await ref.read(sellerProvider.notifier).set(existing);
+          return;
+        }
+      } else {
+        final s = await auth.register(
+          phone: _phone.text,
+          ownerName: _owner.text.trim(),
+          storeName: _store.text.trim(),
+          city: _city,
+          gstin: _gst.text.trim().toUpperCase(),
         );
+        await ref.read(sellerProvider.notifier).set(s);
+        return;
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = '$e. Tap ⚙ to set the server address.');
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    setState(() => _step++);
   }
 
   @override
@@ -140,6 +153,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       letterSpacing: 1.2,
                     ),
                   ),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Server settings',
+                  onPressed: () => showServerSheet(context),
+                  icon: const Icon(Icons.settings_rounded, color: C.muted),
                 ),
               ],
             ),

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/server_sheet.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
@@ -190,9 +191,17 @@ class AccountScreen extends ConsumerWidget {
                         : 'Holiday mode — listings hidden',
                   ),
                   value: s.online,
-                  onChanged: (v) => ref
-                      .read(sellerProvider.notifier)
-                      .save(s.copyWith(online: v)),
+                  onChanged: (v) => runAction(
+                    context,
+                    () => ref
+                        .read(syncProvider.notifier)
+                        .updateSeller(s.copyWith(online: v)),
+                  ),
+                ),
+                _Link(
+                  Icons.dns_outlined,
+                  'Server connection',
+                  () => showServerSheet(context),
                 ),
                 _Link(
                   Icons.videocam_outlined,
@@ -332,15 +341,19 @@ class AccountScreen extends ConsumerWidget {
               label: 'Save',
               onPressed: () {
                 if (store.text.trim().length < 3) return;
-                ref
-                    .read(sellerProvider.notifier)
-                    .save(
-                      s.copyWith(
-                        storeName: store.text.trim(),
-                        ownerName: owner.text.trim(),
-                        gstin: gst.text.trim().toUpperCase(),
+                runAction(
+                  context,
+                  () => ref
+                      .read(syncProvider.notifier)
+                      .updateSeller(
+                        s.copyWith(
+                          storeName: store.text.trim(),
+                          ownerName: owner.text.trim(),
+                          gstin: gst.text.trim().toUpperCase(),
+                        ),
                       ),
-                    );
+                  done: 'Store details saved',
+                );
                 Navigator.pop(c);
               },
             ),

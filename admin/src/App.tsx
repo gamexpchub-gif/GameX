@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -9,12 +9,14 @@ import {
   Menu,
   Package,
   Settings as SettingsIcon,
+  ShieldCheck,
+  Store,
   ShoppingBag,
   Ticket,
   Users,
   Video,
 } from 'lucide-react';
-import { ago, useDB } from './store';
+import { ago, logout, refresh, useDB, useSession } from './store';
 import { cx } from './ui';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -25,54 +27,33 @@ import Banners from './pages/Banners';
 import Coupons from './pages/Coupons';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
-
-const AUTH_KEY = 'gamex_admin_session';
+import QcQueue from './pages/QcQueue';
+import Sellers from './pages/Sellers';
 
 export default function App() {
-  const [authed, setAuthed] = useState(() => {
-    try {
-      return !!localStorage.getItem(AUTH_KEY);
-    } catch {
-      return false;
-    }
-  });
-  if (!authed)
-    return (
-      <Login
-        onLogin={() => {
-          try {
-            localStorage.setItem(AUTH_KEY, '1');
-          } catch {
-            /* ignore */
-          }
-          setAuthed(true);
-        }}
-      />
-    );
-  return (
-    <Shell
-      onLogout={() => {
-        try {
-          localStorage.removeItem(AUTH_KEY);
-        } catch {
-          /* ignore */
-        }
-        setAuthed(false);
-      }}
-    />
-  );
+  const session = useSession();
+  if (!session.token) return <Login />;
+  return <Shell />;
 }
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell() {
+  const session = useSession();
+  useEffect(() => {
+    refresh();
+  }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pendingOrders = useDB((d) => d.orders.filter((o) => o.status === 'pending' || o.status === 'confirmed').length);
-  const pendingLive = useDB((d) => d.live.filter((l) => l.status === 'requested').length);
+  const pendingOrders = useDB((d) => d.orders.filter((o) => o.stage === 'newOrder').length);
+  const pendingLive = useDB((d) => d.live.filter((l) => l.stage === 'pending').length);
+  const pendingQc = useDB((d) => d.listings.filter((l) => l.status === 'inReview').length);
+  const pendingSellers = useDB((d) => d.sellers.filter((x) => x.status === 'pending').length);
   const nav = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/qc', label: 'QC Checking', icon: ShieldCheck, badge: pendingQc, live: true },
     { to: '/orders', label: 'Orders', icon: ShoppingBag, badge: pendingOrders },
     { to: '/products', label: 'Products', icon: Package },
-    { to: '/live', label: 'Live Reviews', icon: Video, badge: pendingLive, live: true },
+    { to: '/sellers', label: 'Sellers', icon: Store, badge: pendingSellers },
     { to: '/customers', label: 'Customers', icon: Users },
+    { to: '/live', label: 'Live Reviews', icon: Video, badge: pendingLive },
     { to: '/banners', label: 'Home Banners', icon: Image },
     { to: '/coupons', label: 'Coupons', icon: Ticket },
     { to: '/settings', label: 'Settings', icon: SettingsIcon },
@@ -112,10 +93,15 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         ))}
       </nav>
       <div className="m-3 rounded-2xl bg-gradient-to-br from-[#2A1466] to-[#5B1E8F] p-4">
-        <p className="text-sm font-bold">Mobile app is synced</p>
-        <p className="mt-1 text-xs text-violet-200">Banners, prices and stock update the GAMEX app instantly.</p>
+        <p className="flex items-center gap-2 text-sm font-bold">
+          <span className={cx('h-2 w-2 rounded-full', session.error ? 'bg-rose-400' : 'bg-emerald-400')} />
+          {session.error ? 'Server offline' : 'Live with apps'}
+        </p>
+        <p className="mt-1 text-xs text-violet-200">
+          {session.error ? session.error : `Shop & Seller apps synced • ${session.syncedAt ? ago(new Date(session.syncedAt).toISOString()) : '…'}`}
+        </p>
       </div>
-      <button onClick={onLogout} className="mx-3 mb-5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400 hover:bg-white/5 hover:text-white">
+      <button onClick={logout} className="mx-3 mb-5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400 hover:bg-white/5 hover:text-white">
         <LogOut size={18} /> Sign out
       </button>
     </aside>
@@ -136,6 +122,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           <div className="mx-auto max-w-[1400px]">
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/qc" element={<QcQueue />} />
+              <Route path="/sellers" element={<Sellers />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/products" element={<Products />} />
               <Route path="/live" element={<LiveReviews />} />
@@ -182,7 +170,9 @@ function Topbar({ title, onMenu }: { title: string; onMenu: () => void }) {
                   key={a.id}
                   onClick={() => {
                     setOpen(false);
-                    navigate(a.kind === 'order' ? '/orders' : a.kind === 'live' ? '/live' : a.kind === 'product' ? '/products' : a.kind === 'customer' ? '/customers' : '/');
+                    navigate(
+                      ({ order: '/orders', live: '/live', qc: '/qc', seller: '/sellers', payout: '/sellers', customer: '/customers' } as Record<string, string>)[a.kind] ?? '/',
+                    );
                   }}
                   className="block w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50"
                 >

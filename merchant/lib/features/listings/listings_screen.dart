@@ -186,7 +186,7 @@ class _ListingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l = listing;
-    final n = ref.read(listingsProvider.notifier);
+    final n = ref.read(syncProvider.notifier);
     final canToggle =
         l.status == ListingStatus.active || l.status == ListingStatus.paused;
     return Panel(
@@ -309,7 +309,7 @@ class _ListingCard extends ConsumerWidget {
                 value: l.stock,
                 onChanged: (v) {
                   HapticFeedback.selectionClick();
-                  n.setStock(l.id, v);
+                  runAction(context, () => n.setStock(l.id, v));
                 },
               ),
               if (canToggle) ...[
@@ -317,13 +317,10 @@ class _ListingCard extends ConsumerWidget {
                 Switch(
                   value: l.status == ListingStatus.active,
                   onChanged: (v) {
-                    n.setStatus(
-                      l.id,
-                      v ? ListingStatus.active : ListingStatus.paused,
-                    );
-                    snack(
+                    runAction(
                       context,
-                      v ? 'Listing is live' : 'Listing paused',
+                      () => n.setPaused(l.id, !v),
+                      done: v ? 'Listing is live' : 'Listing paused',
                       icon: v ? null : Icons.pause_circle_rounded,
                     );
                   },
@@ -411,7 +408,7 @@ class _Menu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final n = ref.read(listingsProvider.notifier);
+    final n = ref.read(syncProvider.notifier);
     return SizedBox(
       width: 28,
       height: 28,
@@ -425,23 +422,30 @@ class _Menu extends ConsumerWidget {
             case 'price':
               final p = await _askPrice(context, listing.price);
               if (p != null) {
-                n.setPrice(listing.id, p);
                 if (context.mounted) {
-                  snack(context, 'Price updated to ${inr(p)}');
+                  await runAction(
+                    context,
+                    () => n.setPrice(listing.id, p),
+                    done: 'Price updated to ${inr(p)}',
+                  );
                 }
               }
             case 'dup':
-              n.upsert(
-                listing.copyWith(
-                  id: n.newId(),
-                  imei: '',
-                  status: ListingStatus.draft,
-                  createdAt: DateTime.now(),
-                  views: 0,
-                  sold: 0,
+              await runAction(
+                context,
+                () => n.saveListing(
+                  listing.copyWith(
+                    id: newListingId(),
+                    imei: '',
+                    status: ListingStatus.draft,
+                    createdAt: DateTime.now(),
+                    views: 0,
+                    sold: 0,
+                  ),
+                  submit: false,
                 ),
+                done: 'Duplicated as draft — add the new IMEI',
               );
-              snack(context, 'Duplicated as draft — add the new IMEI');
             case 'delete':
               final ok = await showDialog<bool>(
                 context: context,
@@ -463,7 +467,13 @@ class _Menu extends ConsumerWidget {
                   ],
                 ),
               );
-              if (ok == true) n.remove(listing.id);
+              if (ok == true && context.mounted) {
+                await runAction(
+                  context,
+                  () => n.deleteListing(listing.id),
+                  done: 'Listing deleted',
+                );
+              }
           }
         },
         itemBuilder: (_) => const [

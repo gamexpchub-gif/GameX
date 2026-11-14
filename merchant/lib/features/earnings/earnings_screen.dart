@@ -74,24 +74,12 @@ class EarningsScreen extends ConsumerWidget {
                     ),
                     onPressed: e.available < 1
                         ? null
-                        : () {
-                            ref
-                                .read(payoutsProvider.notifier)
-                                .add(
-                                  Payout(
-                                    id: 'PO${9121 + payouts.length}',
-                                    amount: e.available,
-                                    orders: 1,
-                                    at: DateTime.now(),
-                                    utr:
-                                        'HDFCN${DateTime.now().millisecondsSinceEpoch % 100000000}',
-                                  ),
-                                );
-                            snack(
-                              context,
-                              '${inr(e.available)} sent — arrives within 2 hours (IMPS)',
-                            );
-                          },
+                        : () => runAction(
+                            context,
+                            () => ref.read(syncProvider.notifier).withdraw(),
+                            done:
+                                '${inr(e.available)} sent — arrives within 2 hours (IMPS)',
+                          ),
                     icon: const Icon(Icons.account_balance_rounded),
                     label: Text(
                       e.available < 1

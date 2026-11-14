@@ -70,6 +70,9 @@ class Listing {
     this.accessories = const [],
     this.notes = '',
     this.rejectReason,
+    this.featured = false,
+    this.certificate,
+    this.qcBy,
   });
 
   final String id;
@@ -96,6 +99,14 @@ class Listing {
   final List<String> accessories;
   final String notes;
   final String? rejectReason;
+  final bool featured;
+
+  /// GAMEX QC certificate number, set when the listing passes QC.
+  final String? certificate;
+  final String? qcBy;
+
+  int get ageDays => DateTime.now().difference(createdAt).inDays;
+  double get conversion => views == 0 ? 0 : sold * 100 / views;
 
   String get title => '$brand $model'.trim();
   String get variant => '$ram / $storage';
@@ -147,6 +158,9 @@ class Listing {
     accessories: accessories ?? this.accessories,
     notes: notes ?? this.notes,
     rejectReason: rejectReason,
+    featured: featured,
+    certificate: certificate,
+    qcBy: qcBy,
   );
 
   Map<String, Object?> toJson() => {
@@ -182,21 +196,24 @@ class Listing {
     storage: j['storage'] as String,
     color: j['color'] as String,
     grade: Grade.values.byName(j['grade'] as String),
-    battery: j['battery'] as int,
+    battery: (j['battery'] as num).toInt(),
     imei: j['imei'] as String,
-    price: j['price'] as int,
-    mrp: j['mrp'] as int,
-    stock: j['stock'] as int,
-    warrantyMonths: j['warranty'] as int,
+    price: (j['price'] as num).toInt(),
+    mrp: (j['mrp'] as num).toInt(),
+    stock: (j['stock'] as num).toInt(),
+    warrantyMonths: (j['warranty'] as num?)?.toInt() ?? 0,
     photos: (j['photos'] as List).cast<String>(),
     status: ListingStatus.values.byName(j['status'] as String),
     createdAt: DateTime.parse(j['createdAt'] as String),
-    views: j['views'] as int? ?? 0,
-    sold: j['sold'] as int? ?? 0,
+    views: (j['views'] as num?)?.toInt() ?? 0,
+    sold: (j['sold'] as num?)?.toInt() ?? 0,
     checks: (j['checks'] as Map? ?? {}).cast<String, bool>(),
     accessories: (j['accessories'] as List? ?? []).cast<String>(),
     notes: j['notes'] as String? ?? '',
     rejectReason: j['rejectReason'] as String?,
+    featured: j['featured'] as bool? ?? false,
+    certificate: j['certificate'] as String?,
+    qcBy: (j['qc'] as Map?)?['by'] as String?,
   );
 }
 
@@ -337,12 +354,12 @@ class SellerOrder {
     item: j['item'] as String,
     variant: j['variant'] as String,
     photo: j['photo'] as String,
-    price: j['price'] as int,
+    price: (j['price'] as num).toInt(),
     buyer: j['buyer'] as String,
     phone: j['phone'] as String,
-    address: j['address'] as String,
-    city: j['city'] as String,
-    pincode: j['pincode'] as String,
+    address: j['address'] as String? ?? '',
+    city: j['city'] as String? ?? '',
+    pincode: j['pincode'] as String? ?? '',
     payment: j['payment'] as String,
     stage: OrderStage.values.byName(j['stage'] as String),
     placedAt: DateTime.parse(j['placedAt'] as String),
@@ -464,14 +481,17 @@ class Payout {
   factory Payout.fromJson(Map<String, dynamic> j) => Payout(
     id: j['id'] as String,
     amount: (j['amount'] as num).toDouble(),
-    orders: j['orders'] as int,
+    orders: (j['orders'] as num).toInt(),
     at: DateTime.parse(j['at'] as String),
     utr: j['utr'] as String,
   );
 }
 
+enum SellerStatus { pending, approved, suspended }
+
 class Seller {
   const Seller({
+    required this.id,
     required this.phone,
     required this.ownerName,
     required this.storeName,
@@ -480,8 +500,11 @@ class Seller {
     this.bank = 'HDFC Bank •••• 4821',
     this.online = true,
     this.rating = 4.8,
+    this.status = SellerStatus.approved,
+    this.suspendReason,
   });
 
+  final String id;
   final String phone;
   final String ownerName;
   final String storeName;
@@ -490,6 +513,8 @@ class Seller {
   final String bank;
   final bool online;
   final double rating;
+  final SellerStatus status;
+  final String? suspendReason;
 
   String get initials => storeName
       .split(' ')
@@ -505,6 +530,7 @@ class Seller {
     String? gstin,
     bool? online,
   }) => Seller(
+    id: id,
     phone: phone,
     ownerName: ownerName ?? this.ownerName,
     storeName: storeName ?? this.storeName,
@@ -513,9 +539,12 @@ class Seller {
     bank: bank,
     online: online ?? this.online,
     rating: rating,
+    status: status,
+    suspendReason: suspendReason,
   );
 
   Map<String, Object?> toJson() => {
+    'id': id,
     'phone': phone,
     'ownerName': ownerName,
     'storeName': storeName,
@@ -524,8 +553,11 @@ class Seller {
     'bank': bank,
     'online': online,
     'rating': rating,
+    'status': status.name,
+    'suspendReason': suspendReason,
   };
   factory Seller.fromJson(Map<String, dynamic> j) => Seller(
+    id: j['id'] as String? ?? '',
     phone: j['phone'] as String,
     ownerName: j['ownerName'] as String,
     storeName: j['storeName'] as String,
@@ -533,6 +565,83 @@ class Seller {
     gstin: j['gstin'] as String? ?? '',
     bank: j['bank'] as String? ?? 'HDFC Bank •••• 4821',
     online: j['online'] as bool? ?? true,
-    rating: (j['rating'] as num?)?.toDouble() ?? 4.8,
+    rating: (j['rating'] as num?)?.toDouble() ?? 0,
+    status:
+        SellerStatus.values.asNameMap()[j['status']] ?? SellerStatus.pending,
+    suspendReason: j['suspendReason'] as String?,
+  );
+}
+
+class Notice {
+  const Notice({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.kind,
+    required this.at,
+    required this.read,
+  });
+  final String id;
+  final String title;
+  final String body;
+
+  /// order, live, qc, payout, account, promo, feature, announcement, info.
+  final String kind;
+  final DateTime at;
+  final bool read;
+
+  bool get isAnnouncement =>
+      kind == 'promo' || kind == 'feature' || kind == 'announcement';
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'title': title,
+    'body': body,
+    'kind': kind,
+    'at': at.toIso8601String(),
+    'read': read,
+  };
+  factory Notice.fromJson(Map<String, dynamic> j) => Notice(
+    id: j['id'] as String,
+    title: j['title'] as String,
+    body: j['body'] as String? ?? '',
+    kind: j['kind'] as String? ?? 'info',
+    at: DateTime.parse(j['at'] as String),
+    read: j['read'] == true,
+  );
+}
+
+class Insights {
+  const Insights({this.demand = const [], this.pricing = const []});
+
+  /// Most ordered models across GAMEX.
+  final List<({String name, int orders})> demand;
+
+  /// Your listings priced away from the market average.
+  final List<({String id, String title, int price, int market})> pricing;
+
+  Map<String, Object?> toJson() => {
+    'demand': [
+      for (final d in demand) {'name': d.name, 'orders': d.orders},
+    ],
+    'pricing': [
+      for (final p in pricing)
+        {'id': p.id, 'title': p.title, 'price': p.price, 'market': p.market},
+    ],
+  };
+  factory Insights.fromJson(Map<String, dynamic> j) => Insights(
+    demand: [
+      for (final d in (j['demand'] as List? ?? []).cast<Map>())
+        (name: d['name'] as String, orders: (d['orders'] as num).toInt()),
+    ],
+    pricing: [
+      for (final p in (j['pricing'] as List? ?? []).cast<Map>())
+        (
+          id: p['id'] as String,
+          title: p['title'] as String,
+          price: (p['price'] as num).toInt(),
+          market: (p['market'] as num).toInt(),
+        ),
+    ],
   );
 }

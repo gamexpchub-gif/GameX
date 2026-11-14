@@ -26,7 +26,7 @@ class OrderDetailScreen extends ConsumerWidget {
       );
     }
     final listing = ref.watch(listingByIdProvider(o.listingId));
-    final n = ref.read(ordersProvider.notifier);
+    final n = ref.read(syncProvider.notifier);
     final fees = Fees.totalFees(o.price);
 
     return Scaffold(
@@ -253,8 +253,11 @@ class OrderDetailScreen extends ConsumerWidget {
                   icon: Icons.check_rounded,
                   onPressed: () {
                     HapticFeedback.mediumImpact();
-                    n.accept(o.id);
-                    snack(context, 'Order accepted — pack it within 24 hours');
+                    runAction(
+                      context,
+                      () => n.accept(o.id),
+                      done: 'Order accepted — pack it within 24 hours',
+                    );
                   },
                 ),
               ),
@@ -290,8 +293,11 @@ class OrderDetailScreen extends ConsumerWidget {
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: C.green),
                   onPressed: () {
-                    n.deliver(o.id);
-                    snack(context, 'Marked delivered (courier confirmation)');
+                    runAction(
+                      context,
+                      () => n.deliver(o.id),
+                      done: 'Marked delivered (courier confirmation)',
+                    );
                   },
                   icon: const Icon(Icons.done_all_rounded),
                   label: const Text('Delivered'),
@@ -349,8 +355,12 @@ class OrderDetailScreen extends ConsumerWidget {
       ),
     );
     if (reason == null || !context.mounted) return;
-    ref.read(ordersProvider.notifier).reject(o.id, reason);
-    snack(context, 'Order rejected', icon: Icons.cancel_rounded);
+    await runAction(
+      context,
+      () => ref.read(syncProvider.notifier).reject(o.id, reason),
+      done: 'Order rejected',
+      icon: Icons.cancel_rounded,
+    );
   }
 
   Future<void> _pack(
@@ -365,8 +375,11 @@ class OrderDetailScreen extends ConsumerWidget {
       builder: (c) => _PackSheet(expectedImei: listing?.imei),
     );
     if (ok != true || !context.mounted) return;
-    ref.read(ordersProvider.notifier).pack(o.id);
-    snack(context, 'Packed & IMEI verified — schedule the pickup next');
+    await runAction(
+      context,
+      () => ref.read(syncProvider.notifier).pack(o.id),
+      done: 'Packed & IMEI verified — schedule the pickup next',
+    );
   }
 
   Future<void> _ship(BuildContext context, WidgetRef ref, SellerOrder o) async {
@@ -375,8 +388,11 @@ class OrderDetailScreen extends ConsumerWidget {
       builder: (c) => const _ShipSheet(),
     );
     if (res == null || !context.mounted) return;
-    ref.read(ordersProvider.notifier).ship(o.id, res.$1, res.$2);
-    snack(context, 'Pickup booked with ${res.$1}');
+    await runAction(
+      context,
+      () => ref.read(syncProvider.notifier).ship(o.id, res.$1, res.$2),
+      done: 'Pickup booked with ${res.$1}',
+    );
   }
 
   void _showLabel(BuildContext context, SellerOrder o) {

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api.dart';
 import '../../../core/storage.dart';
 import '../../../data/models/app_user.dart';
 
@@ -104,6 +105,13 @@ class AuthNotifier extends Notifier<AppUser?> {
     await ref
         .read(localStoreProvider)
         .writeJson(LocalStore.user, user.toJson());
+    // Register the customer with GAMEX so the admin panel can see them.
+    ref.read(apiProvider).post('/customers/sync', {
+      'id': user.id,
+      'name': user.name,
+      'email': user.email,
+      'phone': user.phone ?? '',
+    }).ignore();
   }
 }
 

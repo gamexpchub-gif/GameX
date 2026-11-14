@@ -3,7 +3,9 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/api.dart';
 import '../../../core/storage.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/cart_item.dart';
 import '../../../data/models/order.dart';
@@ -20,7 +22,10 @@ class OrdersNotifier extends Notifier<List<Order>> {
           .map((e) => Order.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
-    if (saved != null) return saved;
+    if (saved != null) {
+      Future.microtask(syncStatuses);
+      return saved;
+    }
     // First launch: show a few sample orders so the Orders and Account
     // pages demonstrate every status. Remove once the backend is live.
     if (store.readString(_seededKey) == null) {
@@ -84,9 +89,35 @@ class OrdersNotifier extends Notifier<List<Order>> {
     required double deliveryFee,
     required double discount,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    final id = newOrderId(DateTime.now());
+    final sellerItems = items.where((i) => i.product.id.startsWith('GXL'));
+    if (sellerItems.isNotEmpty) {
+      // Marketplace items are confirmed by the server (stock check) first.
+      final user = ref.read(authProvider);
+      await ref.read(apiProvider).post('/orders', {
+        'orderId': id,
+        'customer': {
+          'id': user?.id ?? 'guest',
+          'name': user?.name ?? address.fullName,
+          'phone': user?.phone ?? address.phone,
+        },
+        'address': address.toJson(),
+        'payment': switch (payment) {
+          PaymentMethod.cashOnDelivery => 'COD',
+          PaymentMethod.bkash => 'UPI',
+          PaymentMethod.nagad => 'Wallet',
+          PaymentMethod.card => 'Card',
+        },
+        'items': [
+          for (final i in sellerItems)
+            {'listingId': i.product.id, 'qty': i.quantity},
+        ],
+      });
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+    }
     final order = Order(
-      id: newOrderId(DateTime.now()),
+      id: id,
       items: items,
       address: address,
       paymentMethod: payment,
@@ -103,6 +134,47 @@ class OrdersNotifier extends Notifier<List<Order>> {
         .read(localStoreProvider)
         .writeJson(LocalStore.orders, state.map((o) => o.toJson()).toList());
     return order;
+  }
+
+  static const _map = {
+    'pending': OrderStatus.pending,
+    'confirmed': OrderStatus.confirmed,
+    'shipped': OrderStatus.shipped,
+    'delivered': OrderStatus.delivered,
+    'cancelled': OrderStatus.cancelled,
+  };
+
+  /// Pulls the latest status of marketplace orders from the server.
+  Future<void> syncStatuses() async {
+    final ids = state.where((o) => o.hasSellerItems).map((o) => o.id).toList();
+    if (ids.isEmpty) return;
+    try {
+      final list =
+          await ref.read(apiProvider).get('/orders/status?ids=${ids.join(',')}')
+              as List;
+      final byId = {
+        for (final e in list.cast<Map>())
+          e['orderId'] as String: _map[e['status']],
+      };
+      var changed = false;
+      final next = [
+        for (final o in state)
+          if (byId[o.id] != null && byId[o.id] != o.status)
+            () {
+              changed = true;
+              return o.withStatus(byId[o.id]!);
+            }()
+          else
+            o,
+      ];
+      if (!changed) return;
+      state = next;
+      await ref
+          .read(localStoreProvider)
+          .writeJson(LocalStore.orders, state.map((o) => o.toJson()).toList());
+    } catch (_) {
+      // Offline: keep the last known status.
+    }
   }
 
   Order? byId(String id) {

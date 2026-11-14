@@ -1,31 +1,20 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/api.dart';
 import '../core/storage.dart';
 import 'models.dart';
-import 'seed.dart';
 
-const _kSeller = 'seller_v1';
-const _kListings = 'listings_v1';
-const _kOrders = 'orders_v1';
-const _kLive = 'live_v1';
-const _kPayouts = 'payouts_v1';
+const _kSeller = 'seller_v2';
+const _kCache = 'seller_cache_v2';
 
-final _rand = Random();
+/// Client-side id for a new listing (the server keeps it).
+String newListingId() =>
+    'GXL${DateTime.now().millisecondsSinceEpoch % 100000}${Random().nextInt(90) + 10}';
 
-List<T> _readList<T>(
-  LocalStore s,
-  String key,
-  T Function(Map<String, dynamic>) parse,
-) =>
-    s.readJson(
-      key,
-      (j) => (j as List).map((e) => parse(e as Map<String, dynamic>)).toList(),
-    ) ??
-    const [];
-
-// ---------------- Seller session ----------------
+// ---------------- Session ----------------
 
 class SellerNotifier extends Notifier<Seller?> {
   LocalStore get _s => ref.read(localStoreProvider);
@@ -34,16 +23,15 @@ class SellerNotifier extends Notifier<Seller?> {
   Seller? build() =>
       _s.readJson(_kSeller, (j) => Seller.fromJson(j as Map<String, dynamic>));
 
-  Future<void> signIn(Seller seller) async {
+  Future<void> set(Seller seller) async {
     state = seller;
     await _s.writeJson(_kSeller, seller.toJson());
   }
 
-  Future<void> save(Seller seller) => signIn(seller);
-
   Future<void> signOut() async {
     state = null;
     await _s.remove(_kSeller);
+    await _s.remove(_kCache);
   }
 }
 
@@ -51,216 +39,337 @@ final sellerProvider = NotifierProvider<SellerNotifier, Seller?>(
   SellerNotifier.new,
 );
 
-// ---------------- Listings ----------------
+/// Sign-in helpers (before a session exists).
+class AuthApi {
+  AuthApi(this._api);
+  final Api _api;
 
-class ListingsNotifier extends Notifier<List<Listing>> {
-  LocalStore get _s => ref.read(localStoreProvider);
-
-  @override
-  List<Listing> build() {
-    final saved = _readList(_s, _kListings, Listing.fromJson);
-    if (saved.isNotEmpty) return saved;
-    final seed = seedListings();
-    _s.writeJson(_kListings, seed.map((e) => e.toJson()).toList());
-    return seed;
-  }
-
-  void _set(List<Listing> v) {
-    state = v;
-    _s.writeJson(_kListings, v.map((e) => e.toJson()).toList());
-  }
-
-  String newId() => 'GXL${48000 + _rand.nextInt(90000)}';
-
-  /// Adds or replaces [l]. Submitted listings go through a short QC review.
-  Future<void> upsert(Listing l) async {
-    final exists = state.any((e) => e.id == l.id);
-    _set(
-      exists
-          ? [
-              for (final e in state)
-                if (e.id == l.id) l else e,
-            ]
-          : [l, ...state],
-    );
-    if (l.status == ListingStatus.inReview) {
-      await Future<void>.delayed(const Duration(seconds: 3));
-      final cur = state.where((e) => e.id == l.id).firstOrNull;
-      if (cur != null && cur.status == ListingStatus.inReview) {
-        setStatus(l.id, ListingStatus.active);
-      }
+  /// Returns the seller for [phone], or null when not registered yet.
+  Future<Seller?> login(String phone) async {
+    try {
+      final j = await _api.post('/seller/login', {'phone': phone});
+      return Seller.fromJson(j as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.status == 404) return null;
+      rethrow;
     }
   }
 
-  void setStatus(String id, ListingStatus s) => _set([
-    for (final e in state)
-      if (e.id == id) e.copyWith(status: s) else e,
-  ]);
-
-  void setStock(String id, int stock) => _set([
-    for (final e in state)
-      if (e.id == id)
-        e.copyWith(
-          stock: stock,
-          status: stock == 0
-              ? ListingStatus.soldOut
-              : e.status == ListingStatus.soldOut
-              ? ListingStatus.active
-              : e.status,
-        )
-      else
-        e,
-  ]);
-
-  void setPrice(String id, int price) => _set([
-    for (final e in state)
-      if (e.id == id) e.copyWith(price: price) else e,
-  ]);
-
-  void remove(String id) => _set(state.where((e) => e.id != id).toList());
+  Future<Seller> register({
+    required String phone,
+    required String ownerName,
+    required String storeName,
+    required String city,
+    String gstin = '',
+  }) async {
+    final j = await _api.post('/seller/register', {
+      'phone': phone,
+      'ownerName': ownerName,
+      'storeName': storeName,
+      'city': city,
+      'gstin': gstin,
+    });
+    return Seller.fromJson(j as Map<String, dynamic>);
+  }
 }
 
-final listingsProvider = NotifierProvider<ListingsNotifier, List<Listing>>(
-  ListingsNotifier.new,
+final authApiProvider = Provider((ref) => AuthApi(ref.watch(apiProvider)));
+
+// ---------------- Synced seller data ----------------
+
+class SellerData {
+  const SellerData({
+    this.listings = const [],
+    this.orders = const [],
+    this.live = const [],
+    this.payouts = const [],
+    this.notices = const [],
+    this.insights = const Insights(),
+    this.syncedAt,
+    this.syncing = false,
+    this.error,
+  });
+
+  final List<Listing> listings;
+  final List<SellerOrder> orders;
+  final List<LiveCall> live;
+  final List<Payout> payouts;
+  final List<Notice> notices;
+  final Insights insights;
+  final DateTime? syncedAt;
+  final bool syncing;
+
+  /// Last sync error (e.g. server unreachable); data shown is from cache.
+  final String? error;
+
+  bool get loaded => syncedAt != null;
+
+  SellerData copyWith({
+    List<Listing>? listings,
+    List<SellerOrder>? orders,
+    List<LiveCall>? live,
+    List<Payout>? payouts,
+    List<Notice>? notices,
+    Insights? insights,
+    DateTime? syncedAt,
+    bool? syncing,
+    String? error,
+    bool clearError = false,
+  }) => SellerData(
+    listings: listings ?? this.listings,
+    orders: orders ?? this.orders,
+    live: live ?? this.live,
+    payouts: payouts ?? this.payouts,
+    notices: notices ?? this.notices,
+    insights: insights ?? this.insights,
+    syncedAt: syncedAt ?? this.syncedAt,
+    syncing: syncing ?? this.syncing,
+    error: clearError ? null : error ?? this.error,
+  );
+
+  Map<String, Object?> toJson() => {
+    'listings': listings.map((e) => e.toJson()).toList(),
+    'orders': orders.map((e) => e.toJson()).toList(),
+    'live': live.map((e) => e.toJson()).toList(),
+    'payouts': payouts.map((e) => e.toJson()).toList(),
+    'notifications': notices.map((e) => e.toJson()).toList(),
+    'insights': insights.toJson(),
+    'syncedAt': syncedAt?.toIso8601String(),
+  };
+
+  static List<T> _list<T>(Object? v, T Function(Map<String, dynamic>) f) => [
+    for (final e in (v as List? ?? const [])) f(e as Map<String, dynamic>),
+  ];
+
+  factory SellerData.fromJson(Map<String, dynamic> j) => SellerData(
+    listings: _list(j['listings'], Listing.fromJson)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+    orders: _list(j['orders'], SellerOrder.fromJson)
+      ..sort((a, b) => b.placedAt.compareTo(a.placedAt)),
+    live: _list(j['live'], LiveCall.fromJson),
+    payouts: _list(j['payouts'], Payout.fromJson)
+      ..sort((a, b) => b.at.compareTo(a.at)),
+    notices: _list(j['notifications'], Notice.fromJson)
+      ..sort((a, b) => b.at.compareTo(a.at)),
+    insights: Insights.fromJson(
+      (j['insights'] as Map?)?.cast<String, dynamic>() ?? const {},
+    ),
+    syncedAt: j['syncedAt'] == null
+        ? DateTime.now()
+        : DateTime.parse(j['syncedAt'] as String),
+  );
+}
+
+/// Holds everything the seller sees and performs every action through the
+/// GAMEX server, then re-syncs. Polls every 20 seconds while signed in.
+class SyncNotifier extends Notifier<SellerData> {
+  Timer? _timer;
+  Api get _api => ref.read(apiProvider);
+  LocalStore get _store => ref.read(localStoreProvider);
+  String? get _sid => ref.read(sellerProvider)?.id;
+
+  @override
+  SellerData build() {
+    final sid = ref.watch(sellerProvider.select((s) => s?.id));
+    _timer?.cancel();
+    ref.onDispose(() => _timer?.cancel());
+    if (sid == null) return const SellerData();
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) => refresh());
+    Future.microtask(refresh);
+    return _store.readJson(
+          _kCache,
+          (j) => SellerData.fromJson(j as Map<String, dynamic>),
+        ) ??
+        const SellerData();
+  }
+
+  Future<void>? _inflight;
+
+  /// Syncs with the server; concurrent calls share one request.
+  Future<void> refresh() =>
+      _inflight ??= _refresh().whenComplete(() => _inflight = null);
+
+  Future<void> _refresh() async {
+    final sid = _sid;
+    if (sid == null) return;
+    state = state.copyWith(syncing: true);
+    try {
+      final j =
+          await _api.get('/seller/$sid/bootstrap') as Map<String, dynamic>;
+      final seller = Seller.fromJson(j['seller'] as Map<String, dynamic>);
+      if (_sid != sid) return;
+      await ref.read(sellerProvider.notifier).set(seller);
+      final data = SellerData.fromJson({...j, 'syncedAt': null});
+      state = data;
+      await _store.writeJson(_kCache, data.toJson());
+    } on ApiException catch (e) {
+      state = state.copyWith(syncing: false, error: e.message);
+    } catch (_) {
+      state = state.copyWith(syncing: false, error: 'Sync failed');
+    }
+  }
+
+  Future<T> _do<T>(Future<T> Function(String sid) f) async {
+    final sid = _sid;
+    if (sid == null) throw const ApiException('Please sign in again');
+    final r = await f(sid);
+    // Wait for any older sync, then pull the result of this action.
+    await _inflight;
+    unawaited(refresh());
+    return r;
+  }
+
+  // ----- Listings -----
+
+  /// Uploads any local photos, then saves. [submit] sends it for QC.
+  Future<Listing> saveListing(Listing l, {required bool submit}) =>
+      _do((sid) async {
+        final photos = <String>[];
+        for (final p in l.photos) {
+          final isServer = p.startsWith('/img/') || p.startsWith('/uploads/');
+          photos.add(isServer ? p : await _api.upload(p));
+        }
+        final j = await _api.post('/seller/$sid/listings', {
+          ...l.copyWith(photos: photos).toJson(),
+          'submit': submit,
+        });
+        return Listing.fromJson(j as Map<String, dynamic>);
+      });
+
+  Future<void> _patchListing(String id, Map<String, Object> body) =>
+      _do((sid) => _api.patch('/seller/$sid/listings/$id', body));
+
+  Future<void> setStock(String id, int stock) {
+    _local(id, (l) => l.copyWith(stock: stock));
+    return _patchListing(id, {'stock': stock});
+  }
+
+  Future<void> setPrice(String id, int price) =>
+      _patchListing(id, {'price': price});
+
+  Future<void> setPaused(String id, bool paused) {
+    _local(
+      id,
+      (l) => l.copyWith(
+        status: paused ? ListingStatus.paused : ListingStatus.active,
+      ),
+    );
+    return _patchListing(id, {'status': paused ? 'paused' : 'active'});
+  }
+
+  Future<void> deleteListing(String id) {
+    state = state.copyWith(
+      listings: state.listings.where((l) => l.id != id).toList(),
+    );
+    return _do((sid) => _api.delete('/seller/$sid/listings/$id'));
+  }
+
+  void _local(String id, Listing Function(Listing) f) => state = state.copyWith(
+    listings: [
+      for (final l in state.listings)
+        if (l.id == id) f(l) else l,
+    ],
+  );
+
+  // ----- Orders -----
+
+  Future<void> orderAction(
+    String id,
+    String action, [
+    Map<String, Object> body = const {},
+  ]) => _do((sid) => _api.post('/seller/$sid/orders/$id/$action', body));
+
+  Future<void> accept(String id) => orderAction(id, 'accept');
+  Future<void> reject(String id, String reason) =>
+      orderAction(id, 'reject', {'reason': reason});
+  Future<void> pack(String id) => orderAction(id, 'pack');
+  Future<void> ship(String id, String courier, DateTime pickup) => orderAction(
+    id,
+    'ship',
+    {'courier': courier, 'pickupAt': pickup.toIso8601String()},
+  );
+  Future<void> deliver(String id) => orderAction(id, 'deliver');
+
+  // ----- Live reviews -----
+
+  Future<void> updateLive(String id, {LiveStage? stage, bool? converted}) {
+    state = state.copyWith(
+      live: [
+        for (final c in state.live)
+          if (c.id == id) c.copyWith(stage: stage, converted: converted) else c,
+      ],
+    );
+    return _do(
+      (sid) => _api.patch('/seller/$sid/live/$id', {
+        'stage': ?stage?.name,
+        'converted': ?converted,
+      }),
+    );
+  }
+
+  // ----- Money & account -----
+
+  Future<Payout> withdraw() => _do((sid) async {
+    final j = await _api.post('/seller/$sid/withdraw');
+    return Payout.fromJson(j as Map<String, dynamic>);
+  });
+
+  Future<void> markNoticesRead() {
+    state = state.copyWith(
+      notices: [
+        for (final n in state.notices)
+          Notice(
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            kind: n.kind,
+            at: n.at,
+            read: true,
+          ),
+      ],
+    );
+    return _do((sid) => _api.post('/seller/$sid/notifications/read'));
+  }
+
+  Future<void> updateSeller(Seller s) async {
+    await ref.read(sellerProvider.notifier).set(s);
+    await _do(
+      (sid) => _api.put('/seller/$sid', {
+        'storeName': s.storeName,
+        'ownerName': s.ownerName,
+        'gstin': s.gstin,
+        'online': s.online,
+      }),
+    );
+  }
+}
+
+final syncProvider = NotifierProvider<SyncNotifier, SellerData>(
+  SyncNotifier.new,
+);
+
+final listingsProvider = Provider<List<Listing>>(
+  (ref) => ref.watch(syncProvider.select((d) => d.listings)),
+);
+final ordersProvider = Provider<List<SellerOrder>>(
+  (ref) => ref.watch(syncProvider.select((d) => d.orders)),
+);
+final liveProvider = Provider<List<LiveCall>>(
+  (ref) => ref.watch(syncProvider.select((d) => d.live)),
+);
+final payoutsProvider = Provider<List<Payout>>(
+  (ref) => ref.watch(syncProvider.select((d) => d.payouts)),
+);
+final noticesProvider = Provider<List<Notice>>(
+  (ref) => ref.watch(syncProvider.select((d) => d.notices)),
 );
 
 final listingByIdProvider = Provider.family<Listing?, String>(
   (ref, id) => ref.watch(listingsProvider).where((e) => e.id == id).firstOrNull,
 );
 
-// ---------------- Orders ----------------
-
-class OrdersNotifier extends Notifier<List<SellerOrder>> {
-  LocalStore get _s => ref.read(localStoreProvider);
-
-  @override
-  List<SellerOrder> build() {
-    final saved = _readList(_s, _kOrders, SellerOrder.fromJson);
-    if (saved.isNotEmpty) return saved;
-    final seed = seedOrders(ref.read(listingsProvider));
-    _s.writeJson(_kOrders, seed.map((e) => e.toJson()).toList());
-    return seed;
-  }
-
-  void _patch(String id, SellerOrder Function(SellerOrder) f) {
-    state = [
-      for (final o in state)
-        if (o.id == id) f(o) else o,
-    ];
-    _s.writeJson(_kOrders, state.map((e) => e.toJson()).toList());
-  }
-
-  List<OrderEvent> _ev(SellerOrder o, String label) => [
-    ...o.events,
-    OrderEvent(label, DateTime.now()),
-  ];
-
-  void accept(String id) => _patch(
-    id,
-    (o) => o.copyWith(
-      stage: OrderStage.accepted,
-      events: _ev(o, 'Accepted by you'),
-    ),
-  );
-
-  void reject(String id, String reason) {
-    _patch(
-      id,
-      (o) => o.copyWith(
-        stage: OrderStage.cancelled,
-        cancelReason: reason,
-        events: _ev(o, 'Rejected by seller • $reason'),
-      ),
-    );
-  }
-
-  void pack(String id) => _patch(
-    id,
-    (o) => o.copyWith(
-      stage: OrderStage.packed,
-      imeiVerified: true,
-      events: _ev(o, 'Packed • IMEI verified'),
-    ),
-  );
-
-  void ship(String id, String courier, DateTime pickup) {
-    final awb =
-        '${courier.substring(0, 2).toUpperCase()}${9100000000 + _rand.nextInt(99999999)}';
-    _patch(
-      id,
-      (o) => o.copyWith(
-        stage: OrderStage.shipped,
-        courier: courier,
-        awb: awb,
-        pickupAt: pickup,
-        events: _ev(o, 'Handed to $courier • AWB $awb'),
-      ),
-    );
-  }
-
-  void deliver(String id) => _patch(
-    id,
-    (o) => o.copyWith(stage: OrderStage.delivered, events: _ev(o, 'Delivered')),
-  );
-}
-
-final ordersProvider = NotifierProvider<OrdersNotifier, List<SellerOrder>>(
-  OrdersNotifier.new,
-);
-
 final orderByIdProvider = Provider.family<SellerOrder?, String>(
   (ref, id) => ref.watch(ordersProvider).where((e) => e.id == id).firstOrNull,
-);
-
-// ---------------- Live review calls ----------------
-
-class LiveNotifier extends Notifier<List<LiveCall>> {
-  LocalStore get _s => ref.read(localStoreProvider);
-
-  @override
-  List<LiveCall> build() {
-    final saved = _readList(_s, _kLive, LiveCall.fromJson);
-    if (saved.isNotEmpty) return saved;
-    final seed = seedLive(ref.read(listingsProvider));
-    _s.writeJson(_kLive, seed.map((e) => e.toJson()).toList());
-    return seed;
-  }
-
-  void patch(String id, LiveCall Function(LiveCall) f) {
-    state = [
-      for (final c in state)
-        if (c.id == id) f(c) else c,
-    ];
-    _s.writeJson(_kLive, state.map((e) => e.toJson()).toList());
-  }
-}
-
-final liveProvider = NotifierProvider<LiveNotifier, List<LiveCall>>(
-  LiveNotifier.new,
-);
-
-// ---------------- Payouts & earnings ----------------
-
-class PayoutsNotifier extends Notifier<List<Payout>> {
-  LocalStore get _s => ref.read(localStoreProvider);
-
-  @override
-  List<Payout> build() {
-    final saved = _readList(_s, _kPayouts, Payout.fromJson);
-    if (saved.isNotEmpty) return saved;
-    final seed = seedPayouts();
-    _s.writeJson(_kPayouts, seed.map((e) => e.toJson()).toList());
-    return seed;
-  }
-
-  void add(Payout p) {
-    state = [p, ...state];
-    _s.writeJson(_kPayouts, state.map((e) => e.toJson()).toList());
-  }
-}
-
-final payoutsProvider = NotifierProvider<PayoutsNotifier, List<Payout>>(
-  PayoutsNotifier.new,
 );
 
 class Earnings {
@@ -284,10 +393,19 @@ class Earnings {
 final earningsProvider = Provider<Earnings>((ref) {
   final orders = ref.watch(ordersProvider);
   final payouts = ref.watch(payoutsProvider);
-  final now = DateTime.now();
+  return computeEarnings(orders, payouts, DateTime.now());
+});
+
+Earnings computeEarnings(
+  List<SellerOrder> orders,
+  List<Payout> payouts,
+  DateTime now,
+) {
   var available = 0.0, pending = 0.0, gross = 0.0, fees = 0.0;
   var count = 0;
-  final lastPayout = payouts.isEmpty ? DateTime(2000) : payouts.first.at;
+  final lastPayout = payouts.isEmpty
+      ? DateTime(2000)
+      : payouts.map((p) => p.at).reduce((a, b) => a.isAfter(b) ? a : b);
   for (final o in orders) {
     if (o.stage == OrderStage.delivered) {
       final deliveredAt = o.events.last.at;
@@ -316,4 +434,4 @@ final earningsProvider = Provider<Earnings>((ref) {
     feesMonth: fees,
     ordersMonth: count,
   );
-});
+}

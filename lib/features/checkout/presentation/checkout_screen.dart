@@ -101,16 +101,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       builder: (_) => _ProcessingDialog(method: _payment, amount: total),
     );
 
-    final order = await ref
-        .read(ordersProvider.notifier)
-        .placeOrder(
-          items: items,
-          address: address,
-          payment: _payment,
-          subtotal: summary.subtotal,
-          deliveryFee: _deliveryFee(summary, address),
-          discount: summary.discount,
-        );
+    final Order order;
+    try {
+      order = await ref
+          .read(ordersProvider.notifier)
+          .placeOrder(
+            items: items,
+            address: address,
+            payment: _payment,
+            subtotal: summary.subtotal,
+            deliveryFee: _deliveryFee(summary, address),
+            discount: summary.discount,
+          );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      setState(() => _placing = false);
+      showAppSnack(context, 'Order not placed: $e');
+      return;
+    }
     ref.read(cartProvider.notifier).removeKeys({for (final i in items) i.key});
     ref.read(deselectedProvider.notifier).clear();
     ref.read(promoProvider.notifier).clear();

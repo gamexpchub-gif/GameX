@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/models/product.dart';
+import '../../../core/api.dart';
+import '../../../data/repositories/api_product_repository.dart';
 import '../../../data/repositories/product_repository.dart';
 
 final productRepositoryProvider = Provider<ProductRepository>(
-  (ref) => MockProductRepository(),
+  (ref) => ApiProductRepository(ref.watch(apiProvider)),
 );
 
 final categoriesProvider = FutureProvider<List<Category>>(

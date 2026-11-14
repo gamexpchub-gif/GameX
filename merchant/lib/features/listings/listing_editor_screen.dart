@@ -25,12 +25,12 @@ const _rams = ['4GB', '6GB', '8GB', '12GB', '16GB'];
 const _storages = ['64GB', '128GB', '256GB', '512GB', '1TB'];
 const _accessories = ['Box', 'Charger', 'Cable', 'Bill', 'Case'];
 const _samples = [
-  'asset:assets/img/deal_iphone14pro.png',
-  'asset:assets/img/deal_iphone_blue.png',
-  'asset:assets/img/deal_iphone_midnight.png',
-  'asset:assets/img/deal_iphone_purple.png',
-  'asset:assets/img/deal_iphone_starlight.png',
-  'asset:assets/img/deal_iphone_titanium.png',
+  '/img/deal_iphone14pro.png',
+  '/img/deal_iphone_blue.png',
+  '/img/deal_iphone_midnight.png',
+  '/img/deal_iphone_purple.png',
+  '/img/deal_iphone_starlight.png',
+  '/img/deal_iphone_titanium.png',
 ];
 
 /// 5-step wizard to create or edit a listing.
@@ -60,7 +60,7 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
     _l =
         existing ??
         Listing(
-          id: ref.read(listingsProvider.notifier).newId(),
+          id: newListingId(),
           brand: 'Apple',
           model: '',
           ram: '6GB',
@@ -149,10 +149,14 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
     final l = _current.copyWith(
       status: submit ? ListingStatus.inReview : ListingStatus.draft,
     );
-    final n = ref.read(listingsProvider.notifier);
-    // Don't block the UI on QC review.
-    n.upsert(l);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    try {
+      await ref.read(syncProvider.notifier).saveListing(l, submit: submit);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      snack(context, e.toString(), icon: Icons.cloud_off_rounded);
+      return;
+    }
     if (!mounted) return;
     if (submit) {
       await showModalBottomSheet<void>(
@@ -260,13 +264,52 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: switch (_step) {
-          0 => _photos(),
-          1 => _details(),
-          2 => _condition(),
-          3 => _pricing(),
-          _ => _review(),
-        },
+        children: [
+          if (_l.status == ListingStatus.rejected && _l.rejectReason != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Panel(
+                color: C.red.withValues(alpha: 0.06),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.report_gmailerrorred_rounded,
+                      color: C.red,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'GAMEX QC: ${_l.rejectReason}\nFix it and submit again.',
+                        style: const TextStyle(
+                          color: C.red,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (_l.certificate != null && _step == 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Pill(
+                'GAMEX Certified • ${_l.certificate}',
+                color: C.green,
+                icon: Icons.verified_rounded,
+              ),
+            ),
+          ...switch (_step) {
+            0 => _photos(),
+            1 => _details(),
+            2 => _condition(),
+            3 => _pricing(),
+            _ => _review(),
+          },
+        ],
       ),
       bottomNavigationBar: ActionBar(
         child: Row(
