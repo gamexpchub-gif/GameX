@@ -100,14 +100,15 @@ say "Configuring nginx: $DOMAIN/gamex -> GAMEX"
 # GAMEX (admin panel + API + photos) lives entirely under /gamex/.
 mkdir -p /etc/nginx/snippets
 # Move an older /hisab setup over to /gamex.
-grep -rl 'gamex-hisab.conf' /etc/nginx 2>/dev/null | grep -v '/snippets/' | while IFS= read -r f; do
+OLD_FILES="$(grep -Rl 'gamex-hisab.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/nginx.conf 2>/dev/null | xargs -r -n1 readlink -f | sort -u || true)"
+for f in $OLD_FILES; do
   cp -a "$f" "/root/$(basename "$f").before-gamex-path-$(date +%s)"
-  sed -i --follow-symlinks 's#snippets/gamex-hisab\.conf#snippets/gamex.conf#; s#/hisab/dashboard#/gamex/dashboard#' "$f"
+  sed -i 's#snippets/gamex-hisab\.conf#snippets/gamex.conf#; s#/hisab/dashboard#/gamex/dashboard#' "$f"
 done
 cat > /etc/nginx/snippets/gamex.conf <<'NGINX'
 # GAMEX under /gamex/ - managed by deploy/remote-setup.sh
 location = /gamex { return 301 /gamex/; }
-location /gamex/ {
+location ^~ /gamex/ {
     client_max_body_size 10m;
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
@@ -124,10 +125,10 @@ NAME_RE="server_name[^;]*[[:space:]]${DOMAIN_RE}([[:space:]]|;)"
 
 # Is another site (e.g. your existing app) already serving this domain?
 EXISTING=()
-while IFS= read -r f; do
-  [ -n "$f" ] && [ "$f" != /etc/nginx/sites-available/gamex ] && EXISTING+=("$f")
-done < <(grep -rlE "$NAME_RE" /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/nginx.conf 2>/dev/null |
-  xargs -r -n1 readlink -f | sort -u)
+FOUND="$(grep -RlE "$NAME_RE" /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/nginx/nginx.conf 2>/dev/null | xargs -r -n1 readlink -f | sort -u || true)"
+for f in $FOUND; do
+  if [ "$f" != /etc/nginx/sites-available/gamex ]; then EXISTING+=("$f"); fi
+done
 
 SHARED=no
 if [ "${#EXISTING[@]}" -gt 0 ]; then
@@ -166,7 +167,7 @@ NGINX
 fi
 systemctl enable nginx >/dev/null 2>&1
 systemctl reload nginx || systemctl restart nginx
-grep -rq 'gamex-hisab.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || rm -f /etc/nginx/snippets/gamex-hisab.conf
+grep -Rq 'gamex-hisab.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || rm -f /etc/nginx/snippets/gamex-hisab.conf
 sleep 1
 if curl -fs -H "Host: $DOMAIN" http://127.0.0.1/gamex/api/health >/dev/null ||
    curl -fsk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/gamex/api/health" >/dev/null; then
@@ -182,7 +183,7 @@ fi
 
 say "HTTPS certificate"
 MY_IPS="$(hostname -I) $(curl -fs4 --max-time 5 https://api.ipify.org || true)"
-DNS_IP="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}')"
+DNS_IP="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}' || true)"
 HTTPS=no
 if [ -z "$DNS_IP" ]; then
   warn "$DOMAIN does not resolve yet. Add a DNS A record: $DOMAIN -> this server's IP, then run deploy again."
