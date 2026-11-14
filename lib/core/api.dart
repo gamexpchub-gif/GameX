@@ -17,11 +17,11 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// Default server: `--dart-define=API_URL=http://192.168.1.5:8080`, else
-/// localhost (works with `adb reverse tcp:8080 tcp:8080` over USB).
+/// Default server: the live GAMEX server. Override at build time with
+/// `--dart-define=API_URL=http://192.168.1.5:8080` for local testing.
 const kDefaultApi = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'http://127.0.0.1:8080',
+  defaultValue: 'https://admin.deencircle.online',
 );
 const _kApiKey = 'api_url_v1';
 
@@ -36,7 +36,11 @@ class Api {
     var u = url.trim();
     if (!u.startsWith('http')) u = 'http://$u';
     if (u.endsWith('/')) u = u.substring(0, u.length - 1);
-    if (!RegExp(r':\d+$').hasMatch(u)) u = '$u:8080';
+    // A bare IP / localhost means a local dev server on port 8080.
+    final local = RegExp(
+      r'^http://(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.)',
+    ).hasMatch(u);
+    if (local && !RegExp(r':\d+$').hasMatch(u)) u = '$u:8080';
     return _prefs.setString(_kApiKey, u);
   }
 

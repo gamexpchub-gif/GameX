@@ -47,7 +47,7 @@ function Shell() {
   const pendingQc = useDB((d) => d.listings.filter((l) => l.status === 'inReview').length);
   const pendingSellers = useDB((d) => d.sellers.filter((x) => x.status === 'pending').length);
   const nav = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/qc', label: 'QC Checking', icon: ShieldCheck, badge: pendingQc, live: true },
     { to: '/orders', label: 'Orders', icon: ShoppingBag, badge: pendingOrders },
     { to: '/products', label: 'Products', icon: Package },
@@ -59,7 +59,7 @@ function Shell() {
     { to: '/settings', label: 'Settings', icon: SettingsIcon },
   ];
   const loc = useLocation();
-  const current = nav.find((n) => (n.to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(n.to)));
+  const current = nav.find((n) => loc.pathname.startsWith(n.to));
 
   const sidebar = (
     <aside className="flex h-full w-[264px] flex-col bg-ink text-white">
@@ -75,7 +75,7 @@ function Shell() {
           <NavLink
             key={n.to}
             to={n.to}
-            end={n.to === '/'}
+            end={n.to === '/dashboard'}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               cx(
@@ -121,7 +121,7 @@ function Shell() {
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
           <div className="mx-auto max-w-[1400px]">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/qc" element={<QcQueue />} />
               <Route path="/sellers" element={<Sellers />} />
               <Route path="/orders" element={<Orders />} />
@@ -131,7 +131,7 @@ function Shell() {
               <Route path="/banners" element={<Banners />} />
               <Route path="/coupons" element={<Coupons />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<Navigate to="/" />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>
         </main>
@@ -171,7 +171,7 @@ function Topbar({ title, onMenu }: { title: string; onMenu: () => void }) {
                   onClick={() => {
                     setOpen(false);
                     navigate(
-                      ({ order: '/orders', live: '/live', qc: '/qc', seller: '/sellers', payout: '/sellers', customer: '/customers' } as Record<string, string>)[a.kind] ?? '/',
+                      ({ order: '/orders', live: '/live', qc: '/qc', seller: '/sellers', payout: '/sellers', customer: '/customers' } as Record<string, string>)[a.kind] ?? '/dashboard',
                     );
                   }}
                   className="block w-full rounded-xl px-3 py-2 text-left hover:bg-slate-50"

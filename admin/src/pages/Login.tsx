@@ -4,7 +4,7 @@ import { login } from '../store';
 import { Button, inputCls } from '../ui';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@gamex.in');
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -72,7 +72,7 @@ export default function Login() {
               {busy ? 'Signing in…' : 'Sign in'}
             </Button>
           </div>
-          <p className="mt-6 text-center text-xs text-slate-400">Default: admin@gamex.in / gamex@123 (change with ADMIN_PASSWORD)</p>
+          <p className="mt-6 text-center text-xs text-slate-400">Use the admin email and password shown by the deploy script.</p>
         </form>
       </div>
     </div>

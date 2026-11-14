@@ -50,3 +50,29 @@ You can also bake the address into a build with `flutter build apk --dart-define
 | `ADMIN_PASSWORD` | `gamex@123` (change it before going live) |
 
 To reset all demo data, use **Settings → Reset demo data** in the admin panel, or stop the server and delete `data/db.json`.
+
+## Deploy to the VPS (admin.deencircle.online)
+
+1. In your DNS, add an **A record**: `admin` → `200.234.32.137`. If you use Cloudflare, set it to "DNS only" (grey cloud) for the first deploy.
+2. From the GameX folder on your computer:
+
+```bash
+bash deploy/deploy.sh
+```
+
+Type the VPS root password when asked. The script:
+
+- builds the admin panel
+- uploads it to `/opt/gamex`
+- installs Node.js, nginx and certbot
+- runs the server as the `gamex` systemd service, which restarts automatically
+- sets up HTTPS
+
+At the end it prints the admin login. That login is shown only once and is stored in `/etc/gamex.env`.
+
+- Admin panel: https://admin.deencircle.online/hisab/dashboard
+- Apps: both apps use `https://admin.deencircle.online` by default. Rebuild the APKs after deploying.
+
+To update later, run `bash deploy/deploy.sh` again. Your data (`data/db.json`, `uploads/`) is kept.
+
+Useful VPS commands: `systemctl status gamex`, `journalctl -u gamex -f`. To change the admin password, edit `/etc/gamex.env` and run `systemctl restart gamex`.

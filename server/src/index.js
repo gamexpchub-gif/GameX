@@ -15,6 +15,8 @@ const DB_FILE = path.join(ROOT, 'data', 'db.json');
 const UPLOADS = path.join(ROOT, 'uploads');
 const ADMIN_DIST = path.resolve(ROOT, '..', 'admin', 'dist');
 const PORT = Number(process.env.PORT || 8080);
+const HOST = process.env.HOST || '0.0.0.0';
+const ADMIN_BASE = (process.env.ADMIN_BASE || '/hisab').replace(/\/$/, '');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@gamex.in';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gamex@123';
 
@@ -52,6 +54,8 @@ const payout = (price) => price - fees(price);
 
 // ---------------- App ----------------
 const app = express();
+app.set('trust proxy', 'loopback');
+app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use('/img', express.static(path.join(ROOT, 'public', 'img'), { maxAge: '7d' }));
@@ -461,9 +465,27 @@ seller.post('/notifications/read', (req, res) => {
 // Super admin
 // ======================================================
 const tokens = new Set();
+const failed = new Map(); // ip -> { n, first, until }
+const WINDOW = 15 * 6e4;
+const safeEqual = (a, b) => {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
 api.post('/admin/login', (req, res) => {
+  const ip = req.ip;
+  const now = Date.now();
+  let rec = failed.get(ip);
+  if (!rec || (now - rec.first > WINDOW && rec.until < now)) rec = { n: 0, first: now, until: 0 };
+  if (rec.until > now) return bad(res, 429, 'Too many attempts. Try again in 15 minutes.');
   const { email, password } = req.body || {};
-  if (String(email).toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) return bad(res, 401, 'Wrong email or password');
+  if (String(email).toLowerCase() !== ADMIN_EMAIL.toLowerCase() || !safeEqual(password, ADMIN_PASSWORD)) {
+    rec.n += 1;
+    if (rec.n >= 8) rec.until = now + WINDOW;
+    failed.set(ip, rec);
+    return bad(res, 401, 'Wrong email or password');
+  }
+  failed.delete(ip);
   const t = crypto.randomBytes(24).toString('hex');
   tokens.add(t);
   res.json({ token: t });
@@ -605,20 +627,25 @@ admin.post('/reset', (_, res) => {
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 
 // ---------------- Admin panel (built) ----------------
+// Built with base ADMIN_BASE (default /hisab) -> https://<domain>/hisab/dashboard
 if (fs.existsSync(ADMIN_DIST)) {
-  app.use(express.static(ADMIN_DIST));
-  app.get('*', (_, res) => res.sendFile(path.join(ADMIN_DIST, 'index.html')));
+  app.use(ADMIN_BASE, express.static(ADMIN_DIST, { index: false, maxAge: '1h' }));
+  app.get([ADMIN_BASE, `${ADMIN_BASE}/*`], (_, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(ADMIN_DIST, 'index.html'));
+  });
+  app.get('/', (_, res) => res.redirect(`${ADMIN_BASE}/dashboard`));
 } else {
   app.get('/', (_, res) => res.send('GAMEX API is running. Build the admin panel (cd admin && npm run build) to serve it here.'));
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, HOST, () => {
   const ips = Object.values(os.networkInterfaces())
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)
     .map((i) => i.address);
   console.log(`\n  GAMEX server running on port ${PORT}`);
-  console.log(`  Admin panel:   http://localhost:${PORT}`);
+  console.log(`  Admin panel:   http://localhost:${PORT}${ADMIN_BASE}/dashboard`);
   ips.forEach((ip) => console.log(`  Phones (Wi-Fi): http://${ip}:${PORT}`));
   console.log(`  Admin login:   ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}\n`);
 });
