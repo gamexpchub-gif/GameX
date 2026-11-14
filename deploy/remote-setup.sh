@@ -138,16 +138,33 @@ if [ "${#EXISTING[@]}" -gt 0 ]; then
   rm -f /etc/nginx/sites-enabled/gamex /etc/nginx/sites-available/gamex
   BACKUP="/root/nginx-backup-$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BACKUP"
+  TOUCHED=("${EXISTING[@]}")
+  # Other configs may redirect /gamex elsewhere (e.g. an "old address" rule).
+  # Disable only single-line `location = /gamex` / `location ^~ /gamex/`
+  # return-redirects; anything more complex is left alone.
+  REDIRECT_RE='^[[:space:]]*location[[:space:]]+(=[[:space:]]+/gamex|\^~[[:space:]]+/gamex/)[[:space:]]*\{[[:space:]]*return[[:space:]]+30[1278][^;]*;[[:space:]]*\}[[:space:]]*$'
+  REDIRECT_FILES="$(grep -RlE "$REDIRECT_RE" /etc/nginx/snippets /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | xargs -r -n1 readlink -f | sort -u | grep -v '/snippets/gamex.conf$' || true)"
+  for f in $REDIRECT_FILES; do
+    echo "Disabling the /gamex redirect in $f (backup in $BACKUP):"
+    grep -nE "$REDIRECT_RE" "$f" || true
+    TOUCHED+=("$f")
+  done
+  for f in "${TOUCHED[@]}"; do cp -a "$f" "$BACKUP/"; done
+  for f in $REDIRECT_FILES; do
+    sed -i -E "s%${REDIRECT_RE}%# disabled by GAMEX deploy: &%" "$f"
+  done
   for f in "${EXISTING[@]}"; do
-    cp -a "$f" "$BACKUP/"
     grep -q 'snippets/gamex.conf' "$f" ||
       sed -i --follow-symlinks -E "/${NAME_RE}/a\\    include snippets/gamex.conf;" "$f"
   done
   if ! nginx -t; then
     warn "nginx rejected the change - restoring your original config from $BACKUP"
-    for f in "${EXISTING[@]}"; do cp -a "$BACKUP/$(basename "$f")" "$f"; done
+    for f in "${TOUCHED[@]}"; do cp -a "$BACKUP/$(basename "$f")" "$f"; done
     nginx -t && systemctl reload nginx
     exit 1
+  fi
+  if [ -n "$REDIRECT_FILES" ]; then
+    warn "If another deploy tool (e.g. Hisab's tool/deploy_admin.sh) re-adds the /gamex redirect, remove those lines from that tool."
   fi
 else
   SITE=/etc/nginx/sites-available/gamex
