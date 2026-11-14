@@ -45,11 +45,18 @@ if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<EOF
 PORT=8080
 HOST=127.0.0.1
-ADMIN_BASE=/hisab
+ADMIN_BASE=/gamex
 ADMIN_EMAIL=admin@deencircle.online
 ADMIN_PASSWORD=$NEW_PASSWORD
 EOF
   chmod 600 "$ENV_FILE"
+fi
+
+# GAMEX is served under /gamex (older deploys used /hisab).
+if grep -q '^ADMIN_BASE=' "$ENV_FILE"; then
+  sed -i 's#^ADMIN_BASE=.*#ADMIN_BASE=/gamex#' "$ENV_FILE"
+else
+  echo 'ADMIN_BASE=/gamex' >> "$ENV_FILE"
 fi
 
 cat > /etc/systemd/system/gamex.service <<EOF
@@ -89,13 +96,18 @@ curl -fs http://127.0.0.1:8080/api/health >/dev/null || {
 }
 echo "GAMEX server is running (systemd service: gamex)"
 
-say "Configuring nginx: $DOMAIN/hisab -> GAMEX"
-# GAMEX (admin panel + API + photos) lives entirely under /hisab/.
+say "Configuring nginx: $DOMAIN/gamex -> GAMEX"
+# GAMEX (admin panel + API + photos) lives entirely under /gamex/.
 mkdir -p /etc/nginx/snippets
-cat > /etc/nginx/snippets/gamex-hisab.conf <<'NGINX'
-# GAMEX under /hisab/ - managed by deploy/remote-setup.sh
-location = /hisab { return 301 /hisab/; }
-location /hisab/ {
+# Move an older /hisab setup over to /gamex.
+grep -rl 'gamex-hisab.conf' /etc/nginx 2>/dev/null | grep -v '/snippets/' | while IFS= read -r f; do
+  cp -a "$f" "/root/$(basename "$f").before-gamex-path-$(date +%s)"
+  sed -i --follow-symlinks 's#snippets/gamex-hisab\.conf#snippets/gamex.conf#; s#/hisab/dashboard#/gamex/dashboard#' "$f"
+done
+cat > /etc/nginx/snippets/gamex.conf <<'NGINX'
+# GAMEX under /gamex/ - managed by deploy/remote-setup.sh
+location = /gamex { return 301 /gamex/; }
+location /gamex/ {
     client_max_body_size 10m;
     proxy_pass http://127.0.0.1:8080;
     proxy_http_version 1.1;
@@ -121,14 +133,14 @@ SHARED=no
 if [ "${#EXISTING[@]}" -gt 0 ]; then
   SHARED=yes
   echo "$DOMAIN is already served by: ${EXISTING[*]}"
-  echo "Adding GAMEX at /hisab/ to that config - your existing site keeps working."
+  echo "Adding GAMEX at /gamex/ to that config - your existing site keeps working."
   rm -f /etc/nginx/sites-enabled/gamex /etc/nginx/sites-available/gamex
   BACKUP="/root/nginx-backup-$(date +%Y%m%d-%H%M%S)"
   mkdir -p "$BACKUP"
   for f in "${EXISTING[@]}"; do
     cp -a "$f" "$BACKUP/"
-    grep -q 'snippets/gamex-hisab.conf' "$f" ||
-      sed -i --follow-symlinks -E "/${NAME_RE}/a\\    include snippets/gamex-hisab.conf;" "$f"
+    grep -q 'snippets/gamex.conf' "$f" ||
+      sed -i --follow-symlinks -E "/${NAME_RE}/a\\    include snippets/gamex.conf;" "$f"
   done
   if ! nginx -t; then
     warn "nginx rejected the change - restoring your original config from $BACKUP"
@@ -144,8 +156,8 @@ server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
-    include snippets/gamex-hisab.conf;
-    location = / { return 302 /hisab/dashboard; }
+    include snippets/gamex.conf;
+    location = / { return 302 /gamex/dashboard; }
 }
 NGINX
   fi
@@ -154,12 +166,13 @@ NGINX
 fi
 systemctl enable nginx >/dev/null 2>&1
 systemctl reload nginx || systemctl restart nginx
+grep -rq 'gamex-hisab.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || rm -f /etc/nginx/snippets/gamex-hisab.conf
 sleep 1
-if curl -fs -H "Host: $DOMAIN" http://127.0.0.1/hisab/api/health >/dev/null ||
-   curl -fsk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/hisab/api/health" >/dev/null; then
+if curl -fs -H "Host: $DOMAIN" http://127.0.0.1/gamex/api/health >/dev/null ||
+   curl -fsk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/gamex/api/health" >/dev/null; then
   echo "nginx -> GAMEX OK"
 else
-  warn "nginx is not forwarding /hisab/ yet. Check with: nginx -T | grep -n hisab"
+  warn "nginx is not forwarding /gamex/ yet. Check with: nginx -T | grep -n gamex"
 fi
 
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
@@ -190,8 +203,8 @@ fi
 SCHEME=http
 [ "$HTTPS" = yes ] && SCHEME=https
 say "Done"
-echo "Admin panel:  $SCHEME://$DOMAIN/hisab/dashboard"
-echo "API for apps: $SCHEME://$DOMAIN/hisab"
+echo "Admin panel:  $SCHEME://$DOMAIN/gamex/dashboard"
+echo "API for apps: $SCHEME://$DOMAIN/gamex"
 if [ -n "$NEW_PASSWORD" ]; then
   echo
   echo "Admin login (save this, it is shown only once):"

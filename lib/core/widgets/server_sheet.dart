@@ -69,7 +69,7 @@ class _ServerSheetState extends ConsumerState<_ServerSheet> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Seller listings, orders and live reviews come from this server. Default: https://admin.deencircle.online/hisab — for a local test server use its Wi-Fi address, e.g. http://192.168.1.5:8080',
+            'Seller listings, orders and live reviews come from this server. Default: https://admin.deencircle.online/gamex — for a local test server use its Wi-Fi address, e.g. http://192.168.1.5:8080',
             style: TextStyle(color: Color(0xFF5B6380), height: 1.4),
           ),
           const SizedBox(height: 14),

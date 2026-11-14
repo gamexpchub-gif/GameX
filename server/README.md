@@ -70,10 +70,10 @@ Type the VPS root password when asked. The script:
 
 At the end it prints the admin login. That login is shown only once and is stored in `/etc/gamex.env`.
 
-- Admin panel: https://admin.deencircle.online/hisab/dashboard
-- API for the apps: `https://admin.deencircle.online/hisab`. Both apps use this by default, so rebuild the APKs after deploying.
+- Admin panel: https://admin.deencircle.online/gamex/dashboard
+- API for the apps: `https://admin.deencircle.online/gamex`. Both apps use this by default, so rebuild the APKs after deploying.
 
-GAMEX lives entirely under `/hisab/`: the admin panel, `/hisab/api` and `/hisab/uploads`. If the domain is already used by another site (for example an existing Flask app), the script adds only a `/hisab/` block to that site's Nginx config, and the other site keeps working. It backs up the config to `/root/nginx-backup-*` first, and restores it automatically if Nginx rejects the change.
+GAMEX lives entirely under `/gamex/`: the admin panel, `/gamex/api` and `/gamex/uploads`. If the domain is already used by another site (for example an existing Flask app), the script adds only a `/gamex/` block to that site's Nginx config, and the other site keeps working. It backs up the config to `/root/nginx-backup-*` first, and restores it automatically if Nginx rejects the change.
 
 To update later, run `bash deploy/deploy.sh` again. Your data (`data/db.json`, `uploads/`) is kept.
 

@@ -16,7 +16,7 @@ const UPLOADS = path.join(ROOT, 'uploads');
 const ADMIN_DIST = path.resolve(ROOT, '..', 'admin', 'dist');
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
-const ADMIN_BASE = (process.env.ADMIN_BASE || '/hisab').replace(/\/$/, '');
+const ADMIN_BASE = (process.env.ADMIN_BASE || '/gamex').replace(/\/$/, '');
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@gamex.in';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gamex@123';
 
@@ -58,7 +58,7 @@ app.set('trust proxy', 'loopback');
 app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-// Everything is reachable both at / and under ADMIN_BASE (e.g. /hisab/api),
+// Everything is reachable both at / and under ADMIN_BASE (e.g. /gamex/api),
 // so GAMEX can share a domain with another site that owns the root.
 const site = express.Router();
 site.use('/img', express.static(path.join(ROOT, 'public', 'img'), { maxAge: '7d' }));
@@ -632,7 +632,7 @@ admin.post('/reset', (_, res) => {
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 
 // ---------------- Admin panel (built) ----------------
-// Built with base ADMIN_BASE (default /hisab) -> https://<domain>/hisab/dashboard
+// Built with base ADMIN_BASE (default /gamex) -> https://<domain>/gamex/dashboard
 if (fs.existsSync(ADMIN_DIST)) {
   app.use(ADMIN_BASE, express.static(ADMIN_DIST, { index: false, maxAge: '1h' }));
   app.get([ADMIN_BASE, `${ADMIN_BASE}/*`], (_, res) => {

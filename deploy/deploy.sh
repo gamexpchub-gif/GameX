@@ -20,8 +20,8 @@ for tool in npm rsync ssh; do
   command -v "$tool" >/dev/null || { echo "Please install $tool first (sudo apt install -y $tool)"; exit 1; }
 done
 
-say "Building the admin panel (served at /hisab/)"
-(cd "$ROOT/admin" && npm ci --no-audit --no-fund --loglevel=error && ADMIN_BASE=/hisab/ npm run build)
+say "Building the admin panel (served at /gamex/)"
+(cd "$ROOT/admin" && npm ci --no-audit --no-fund --loglevel=error && ADMIN_BASE=/gamex/ npm run build)
 
 say "Connecting to $TARGET"
 "${SSH[@]}" "$TARGET" 'mkdir -p /opt/gamex/server /opt/gamex/admin/dist && (command -v rsync >/dev/null || (apt-get update -qq && apt-get install -y -qq rsync >/dev/null))'

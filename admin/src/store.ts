@@ -217,7 +217,7 @@ const EMPTY: DB = {
 };
 
 // ---------- Paths ----------
-/** App base, e.g. "/hisab". API and media live under it too. */
+/** App base, e.g. "/gamex". API and media live under it too. */
 export const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 /** Server path ("/img/..", "/uploads/..") -> URL under the app base. */
 export const media = (p: string) => (p && p.startsWith('/') ? `${BASE}${p}` : p);
