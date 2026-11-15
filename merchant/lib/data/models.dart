@@ -73,6 +73,11 @@ class Listing {
     this.featured = false,
     this.certificate,
     this.qcBy,
+    this.deviceType = 'Mobile Phone',
+    this.network = '5G / 4G / 3G / 2G',
+    this.sim = 'Dual SIM (Nano)',
+    this.returnDays = 7,
+    this.offerPercent = 0,
   });
 
   final String id;
@@ -104,6 +109,15 @@ class Listing {
   /// GAMEX QC certificate number, set when the listing passes QC.
   final String? certificate;
   final String? qcBy;
+  final String deviceType;
+  final String network;
+  final String sim;
+
+  /// 0 = no returns, otherwise 7 or 15 days.
+  final int returnDays;
+
+  /// Extra launch discount shown to buyers (0 = off).
+  final int offerPercent;
 
   int get ageDays => DateTime.now().difference(createdAt).inDays;
   double get conversion => views == 0 ? 0 : sold * 100 / views;
@@ -135,6 +149,11 @@ class Listing {
     Map<String, bool>? checks,
     List<String>? accessories,
     String? notes,
+    String? deviceType,
+    String? network,
+    String? sim,
+    int? returnDays,
+    int? offerPercent,
   }) => Listing(
     id: id ?? this.id,
     brand: brand ?? this.brand,
@@ -161,6 +180,11 @@ class Listing {
     featured: featured,
     certificate: certificate,
     qcBy: qcBy,
+    deviceType: deviceType ?? this.deviceType,
+    network: network ?? this.network,
+    sim: sim ?? this.sim,
+    returnDays: returnDays ?? this.returnDays,
+    offerPercent: offerPercent ?? this.offerPercent,
   );
 
   Map<String, Object?> toJson() => {
@@ -186,6 +210,11 @@ class Listing {
     'accessories': accessories,
     'notes': notes,
     'rejectReason': rejectReason,
+    'deviceType': deviceType,
+    'network': network,
+    'sim': sim,
+    'returnDays': returnDays,
+    'offerPercent': offerPercent,
   };
 
   factory Listing.fromJson(Map<String, dynamic> j) => Listing(
@@ -214,6 +243,11 @@ class Listing {
     featured: j['featured'] as bool? ?? false,
     certificate: j['certificate'] as String?,
     qcBy: (j['qc'] as Map?)?['by'] as String?,
+    deviceType: j['deviceType'] as String? ?? 'Mobile Phone',
+    network: j['network'] as String? ?? '5G / 4G / 3G / 2G',
+    sim: j['sim'] as String? ?? 'Dual SIM (Nano)',
+    returnDays: (j['returnDays'] as num?)?.toInt() ?? 7,
+    offerPercent: (j['offerPercent'] as num?)?.toInt() ?? 0,
   );
 }
 

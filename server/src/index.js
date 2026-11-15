@@ -315,7 +315,7 @@ seller.post('/listings', (req, res) => {
     const dup = db.listings.find((l) => l.imei === body.imei && l.id !== body.id && !['soldOut'].includes(l.status));
     if (dup) return bad(res, 409, `This IMEI is already listed (${dup.id})`);
   }
-  const fields = ['brand', 'model', 'ram', 'storage', 'color', 'grade', 'battery', 'imei', 'price', 'mrp', 'stock', 'warranty', 'photos', 'checks', 'accessories', 'notes'];
+  const fields = ['brand', 'model', 'ram', 'storage', 'color', 'grade', 'battery', 'imei', 'price', 'mrp', 'stock', 'warranty', 'photos', 'checks', 'accessories', 'notes', 'deviceType', 'network', 'sim', 'returnDays', 'offerPercent'];
   const l = existing || { id: body.id || uid('GXL'), sellerId: req.seller.id, createdAt: now(), views: 0, sold: 0, featured: false, qc: null };
   fields.forEach((f) => body[f] !== undefined && (l[f] = body[f]));
   l.status = submit ? 'inReview' : existing && !submit ? existing.status : 'draft';
