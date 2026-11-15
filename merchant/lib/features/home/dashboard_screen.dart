@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/store.dart';
+import '../listings/widgets/listing_ui.dart';
 import '../orders/orders_screen.dart' show OrderTile;
 
 const _kGoal = 'monthly_goal_v1';
@@ -87,168 +88,217 @@ class DashboardScreen extends ConsumerWidget {
     final announcements = data.notices.where((n) => n.isAnnouncement).toList();
 
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: () => ref.read(syncProvider.notifier).refresh(),
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _Header(
-                seller: seller,
-                data: data,
-                available: earn.available,
-                unread: unread,
-                todaySales: todaySales,
-                yesterdaySales: yesterdaySales,
+      backgroundColor: const Color(0xFFF4F2FF),
+      body: LxBackground(
+        child: RefreshIndicator(
+          onRefresh: () => ref.read(syncProvider.notifier).refresh(),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _Header(
+                  seller: seller,
+                  data: data,
+                  available: earn.available,
+                  unread: unread,
+                  todaySales: todaySales,
+                  yesterdaySales: yesterdaySales,
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-              sliver: SliverList.list(
-                children: [
-                  if (data.error != null) _OfflineBanner(error: data.error!),
-                  if (seller.status != SellerStatus.approved)
-                    _AccountBanner(seller: seller),
-                  _TodayTasks(
-                    tasks: [
-                      _Task(
-                        Icons.notifications_active_rounded,
-                        C.amber,
-                        'Accept new orders',
-                        newOrders,
-                        () => context.go('/orders?tab=new'),
-                      ),
-                      _Task(
-                        Icons.inventory_rounded,
-                        C.primary,
-                        'Verify IMEI & pack',
-                        toPack,
-                        () => context.go('/orders?tab=ship'),
-                      ),
-                      _Task(
-                        Icons.local_shipping_rounded,
-                        C.violet,
-                        'Book courier pickup',
-                        toShip,
-                        () => context.go('/orders?tab=ship'),
-                      ),
-                      _Task(
-                        Icons.videocam_rounded,
-                        C.red,
-                        'Live review requests',
-                        pendingLive + liveToday,
-                        () => context.push('/live'),
-                      ),
-                      _Task(
-                        Icons.edit_note_rounded,
-                        C.cyan,
-                        'Fix rejected listings',
-                        rejected.length,
-                        () => context.go('/listings'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.5,
-                    children: [
-                      _Kpi(
-                        icon: Icons.receipt_long_rounded,
-                        color: C.primary,
-                        label: 'Orders (30d)',
-                        value: '${earn.ordersMonth}',
-                        onTap: () => context.go('/orders'),
-                      ),
-                      _Kpi(
-                        icon: Icons.inventory_2_rounded,
-                        color: C.green,
-                        label: 'Live listings',
-                        value: '${active.length}',
-                        onTap: () => context.go('/listings'),
-                      ),
-                      _Kpi(
-                        icon: Icons.visibility_rounded,
-                        color: C.amber,
-                        label: 'Store views',
-                        value: views >= 1000
-                            ? '${(views / 1000).toStringAsFixed(1)}K'
-                            : '$views',
-                      ),
-                      _Kpi(
-                        icon: Icons.percent_rounded,
-                        color: C.violet,
-                        label: 'View → order',
-                        value: views == 0
-                            ? '0%'
-                            : '${(earn.ordersMonth * 100 / views).toStringAsFixed(1)}%',
-                      ),
-                    ],
-                  ),
-                  if (announcements.isNotEmpty) ...[
-                    const SectionTitle('From GAMEX'),
-                    _Announcements(items: announcements),
-                  ],
-                  const SectionTitle('Sales'),
-                  _SalesCard(orders: counted.toList()),
-                  const SectionTitle('Growth'),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _GoalCard(month: _monthSales(counted, now)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: _LevelCard(gmv30: earn.grossMonth)),
-                    ],
-                  ),
-                  if (inReview.isNotEmpty || rejected.isNotEmpty) ...[
-                    SectionTitle(
-                      'Quality check',
-                      action: 'Listings',
-                      onAction: () => context.go('/listings'),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                sliver: SliverList.list(
+                  children: [
+                    if (data.error != null) _OfflineBanner(error: data.error!),
+                    if (seller.status != SellerStatus.approved)
+                      _AccountBanner(seller: seller),
+                    _TodayTasks(
+                      tasks: [
+                        _Task(
+                          Icons.notifications_active_rounded,
+                          C.amber,
+                          'Accept new orders',
+                          newOrders,
+                          () => context.go('/orders?tab=new'),
+                        ),
+                        _Task(
+                          Icons.inventory_rounded,
+                          C.primary,
+                          'Verify IMEI & pack',
+                          toPack,
+                          () => context.go('/orders?tab=ship'),
+                        ),
+                        _Task(
+                          Icons.local_shipping_rounded,
+                          C.violet,
+                          'Book courier pickup',
+                          toShip,
+                          () => context.go('/orders?tab=ship'),
+                        ),
+                        _Task(
+                          Icons.videocam_rounded,
+                          C.red,
+                          'Live review requests',
+                          pendingLive + liveToday,
+                          () => context.push('/live'),
+                        ),
+                        _Task(
+                          Icons.edit_note_rounded,
+                          C.cyan,
+                          'Fix rejected listings',
+                          rejected.length,
+                          () => context.go('/listings'),
+                        ),
+                      ],
                     ),
-                    _QcCard(inReview: inReview, rejected: rejected),
-                  ],
-                  const SectionTitle('Quick actions'),
-                  const _QuickGrid(),
-                  if (active.isNotEmpty) ...[
-                    const SectionTitle('Top listings'),
-                    _TopListings(listings: active.toList()),
-                  ],
-                  const SectionTitle('Inventory health'),
-                  _InventoryHealth(listings: listings),
-                  if (data.insights.demand.isNotEmpty ||
-                      data.insights.pricing.isNotEmpty) ...[
-                    const SectionTitle('Market insights'),
-                    _Insights(insights: data.insights),
-                  ],
-                  SectionTitle(
-                    'Recent orders',
-                    action: 'All orders',
-                    onAction: () => context.go('/orders'),
-                  ),
-                  if (orders.isEmpty)
-                    const Panel(
-                      child: EmptyView(
-                        icon: Icons.receipt_long_rounded,
-                        title: 'No orders yet',
-                        text: 'Approved listings appear in the GAMEX app. Orders will show up here.',
+                    const SizedBox(height: 12),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.36,
+                      children: [
+                        _Kpi(
+                          icon: Icons.receipt_long_rounded,
+                          color: C.primary,
+                          label: 'Orders (30d)',
+                          value: '${earn.ordersMonth}',
+                          onTap: () => context.go('/orders'),
+                        ),
+                        _Kpi(
+                          icon: Icons.inventory_2_rounded,
+                          color: C.green,
+                          label: 'Live listings',
+                          value: '${active.length}',
+                          onTap: () => context.go('/listings'),
+                        ),
+                        _Kpi(
+                          icon: Icons.visibility_rounded,
+                          color: C.amber,
+                          label: 'Store views',
+                          value: views >= 1000
+                              ? '${(views / 1000).toStringAsFixed(1)}K'
+                              : '$views',
+                        ),
+                        _Kpi(
+                          icon: Icons.percent_rounded,
+                          color: C.violet,
+                          label: 'View → order',
+                          value: views == 0
+                              ? '0%'
+                              : '${(earn.ordersMonth * 100 / views).toStringAsFixed(1)}%',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const _SellCard(),
+                    if (announcements.isNotEmpty) ...[
+                      const _Title('From GAMEX'),
+                      _Announcements(items: announcements),
+                    ],
+                    const _Title('Sales'),
+                    _SalesCard(orders: counted.toList()),
+                    const _Title('Growth'),
+                    _ScoreCard(
+                      rating: seller.rating,
+                      cancelRate: orders.isEmpty
+                          ? 0
+                          : orders
+                                    .where(
+                                      (o) => o.events.any(
+                                        (e) => e.label.startsWith(
+                                          'Rejected by seller',
+                                        ),
+                                      ),
+                                    )
+                                    .length *
+                                100 /
+                                orders.length,
+                      qcPass: () {
+                        final checked = listings.where(
+                          (l) =>
+                              l.status != ListingStatus.inReview &&
+                              l.status != ListingStatus.draft,
+                        );
+                        return checked.isEmpty
+                            ? 1.0
+                            : checked
+                                      .where(
+                                        (l) =>
+                                            l.status != ListingStatus.rejected,
+                                      )
+                                      .length /
+                                  checked.length;
+                      }(),
+                      liveConv: () {
+                        final done = data.live.where(
+                          (c) => c.stage == LiveStage.done,
+                        );
+                        return done.isEmpty
+                            ? 0.0
+                            : done.where((c) => c.converted == true).length /
+                                  done.length;
+                      }(),
+                    ),
+                    const SizedBox(height: 12),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _GoalCard(month: _monthSales(counted, now)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: _LevelCard(gmv30: earn.grossMonth)),
+                        ],
                       ),
                     ),
-                  for (final o in orders.take(3)) ...[
-                    OrderTile(order: o),
-                    const SizedBox(height: 10),
+                    if (inReview.isNotEmpty || rejected.isNotEmpty) ...[
+                      _Title(
+                        'Quality check',
+                        action: 'Listings',
+                        onAction: () => context.go('/listings'),
+                      ),
+                      _QcCard(inReview: inReview, rejected: rejected),
+                    ],
+                    const _Title('Quick actions'),
+                    const _QuickGrid(),
+                    if (active.isNotEmpty) ...[
+                      const _Title('Top listings'),
+                      _TopListings(listings: active.toList()),
+                    ],
+                    const _Title('Inventory health'),
+                    _InventoryHealth(listings: listings),
+                    if (data.insights.demand.isNotEmpty ||
+                        data.insights.pricing.isNotEmpty) ...[
+                      const _Title('Market insights'),
+                      _Insights(insights: data.insights),
+                    ],
+                    _Title(
+                      'Recent orders',
+                      action: 'All orders',
+                      onAction: () => context.go('/orders'),
+                    ),
+                    if (orders.isEmpty)
+                      const LxCard(
+                        child: EmptyView(
+                          icon: Icons.receipt_long_rounded,
+                          title: 'No orders yet',
+                          text: 'Approved listings appear in the GAMEX app. Orders will show up here.',
+                        ),
+                      ),
+                    for (final o in orders.take(3)) ...[
+                      OrderTile(order: o),
+                      const SizedBox(height: 10),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -290,173 +340,171 @@ class _Header extends ConsumerWidget {
     final change = yesterdaySales == 0
         ? null
         : (todaySales - yesterdaySales) * 100 / yesterdaySales;
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: C.nightGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        18,
-        MediaQuery.paddingOf(context).top + 12,
-        12,
-        20,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: C.brandGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Text(
-                  seller.initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$greet, ${seller.ownerName.split(' ').first}',
-                      style: const TextStyle(
-                        color: Color(0xFFB9C2FF),
-                        fontSize: 13,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            seller.storeName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        if (seller.status == SellerStatus.approved) ...[
-                          const SizedBox(width: 6),
-                          const Icon(
-                            Icons.verified_rounded,
-                            color: Color(0xFF5CB8FF),
-                            size: 18,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              _OnlineSwitch(seller: seller),
-              IconButton(
-                onPressed: () => _showNotices(context, ref),
-                icon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text('$unread'),
-                  backgroundColor: C.red,
-                  child: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+    return _LiquidHeader(
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          MediaQuery.paddingOf(context).top + 12,
+          12,
+          20,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: C.brandGradient,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Text(
+                    seller.initials,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        "Today's sales",
-                        style: TextStyle(
-                          color: Color(0xFFB9C2FF),
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
                       Text(
-                        inr(todaySales),
+                        '$greet, ${seller.ownerName.split(' ').first}',
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
+                          color: Color(0xFFB9C2FF),
+                          fontSize: 13,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        change == null
-                            ? 'vs ${inr(yesterdaySales)} yesterday'
-                            : '${change >= 0 ? '▲' : '▼'} ${change.abs().toStringAsFixed(0)}% vs yesterday',
-                        style: TextStyle(
-                          color: change == null
-                              ? Colors.white60
-                              : change >= 0
-                              ? const Color(0xFF4ADE80)
-                              : const Color(0xFFFF8A8A),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              seller.storeName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (seller.status == SellerStatus.approved) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.verified_rounded,
+                              color: Color(0xFF5CB8FF),
+                              size: 18,
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
                 ),
-                _SyncChip(data: data),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Row(
-              children: [
-                _HeaderTile(
-                  label: 'Withdrawable',
-                  value: inrShort(available),
-                  icon: Icons.account_balance_wallet_rounded,
-                  onTap: () => context.go('/earnings'),
-                ),
-                const SizedBox(width: 8),
-                _HeaderTile(
-                  label: 'Rating',
-                  value: seller.rating == 0
-                      ? 'New'
-                      : seller.rating.toStringAsFixed(1),
-                  icon: Icons.star_rounded,
-                ),
-                const SizedBox(width: 8),
-                _HeaderTile(
-                  label: 'Payout',
-                  value: _nextMonday(),
-                  icon: Icons.event_available_rounded,
-                  onTap: () => context.go('/earnings'),
+                _OnlineSwitch(seller: seller),
+                IconButton(
+                  onPressed: () => _showNotices(context, ref),
+                  icon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text('$unread'),
+                    backgroundColor: C.red,
+                    child: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Today's sales",
+                          style: TextStyle(
+                            color: Color(0xFFB9C2FF),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          inr(todaySales),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          change == null
+                              ? 'vs ${inr(yesterdaySales)} yesterday'
+                              : '${change >= 0 ? '▲' : '▼'} ${change.abs().toStringAsFixed(0)}% vs yesterday',
+                          style: TextStyle(
+                            color: change == null
+                                ? Colors.white60
+                                : change >= 0
+                                ? const Color(0xFF4ADE80)
+                                : const Color(0xFFFF8A8A),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _SyncChip(data: data),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Row(
+                children: [
+                  _HeaderTile(
+                    label: 'Withdrawable',
+                    value: inrShort(available),
+                    icon: Icons.account_balance_wallet_rounded,
+                    onTap: () => context.go('/earnings'),
+                  ),
+                  const SizedBox(width: 8),
+                  _HeaderTile(
+                    label: 'Rating',
+                    value: seller.rating == 0
+                        ? 'New'
+                        : seller.rating.toStringAsFixed(1),
+                    icon: Icons.star_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _HeaderTile(
+                    label: 'Payout',
+                    value: _nextMonday(),
+                    icon: Icons.event_available_rounded,
+                    onTap: () => context.go('/earnings'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -507,7 +555,7 @@ class _Header extends ConsumerWidget {
                       itemBuilder: (_, i) {
                         final n = notices[i];
                         final (icon, color) = _noticeStyle(n.kind);
-                        return Panel(
+                        return LxCard(
                           padding: const EdgeInsets.all(12),
                           color: n.read
                               ? Colors.white
@@ -747,7 +795,7 @@ class _OfflineBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Panel(
+      child: LxCard(
         color: C.red.withValues(alpha: 0.06),
         padding: const EdgeInsets.all(12),
         onTap: () => showServerSheet(context),
@@ -782,7 +830,7 @@ class _AccountBanner extends StatelessWidget {
     final c = suspended ? C.red : C.amber;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Panel(
+      child: LxCard(
         color: c.withValues(alpha: 0.07),
         padding: const EdgeInsets.all(14),
         child: Row(
@@ -838,7 +886,7 @@ class _TodayTasks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final open = tasks.where((t) => t.count > 0).toList();
-    return Panel(
+    return LxCard(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -881,15 +929,7 @@ class _TodayTasks extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
                   children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: t.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(t.icon, color: t.color, size: 18),
-                    ),
+                    _GIcon(t.icon, colors: _grad(t.color), size: 36),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -942,28 +982,21 @@ class _Kpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Panel(
+    return LxCard(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 19),
-          ),
+          _GIcon(icon, colors: _grad(color), size: 38),
           const Spacer(),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 21,
-              fontWeight: FontWeight.w800,
-              color: C.ink,
+              fontSize: 23,
+              fontWeight: FontWeight.w900,
+              color: LX.ink,
+              letterSpacing: -0.4,
             ),
           ),
           Text(
@@ -1077,7 +1110,7 @@ class _SalesCardState extends State<_SalesCard> {
     });
     final total = days.fold<int>(0, (s, d) => s + d.$2);
     final count = days.fold<int>(0, (s, d) => s + d.$3);
-    return Panel(
+    return LxCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1213,7 +1246,7 @@ class _GoalCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final goal = ref.watch(goalProvider);
     final p = (month / goal).clamp(0.0, 1.0);
-    return Panel(
+    return LxCard(
       onTap: () => _edit(context, ref, goal),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -1316,7 +1349,7 @@ class _LevelCard extends StatelessWidget {
     final p = next == null
         ? 1.0
         : ((gmv30 - cur.$2) / (next.$2 - cur.$2)).clamp(0.0, 1.0);
-    return Panel(
+    return LxCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1382,7 +1415,7 @@ class _QcCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Panel(
+    return LxCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
@@ -1509,14 +1542,16 @@ class _QuickGrid extends ConsumerWidget {
                   label: Text('${it.$5}'),
                   backgroundColor: C.red,
                   child: Container(
-                    width: 56,
-                    height: 56,
+                    width: 60,
+                    height: 60,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: C.border),
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: LX.soft(0.10),
                     ),
-                    child: Icon(it.$1, color: it.$3, size: 25),
+                    alignment: Alignment.center,
+                    child: _GIcon(it.$1, colors: _grad(it.$3), size: 40),
                   ),
                 ),
                 const SizedBox(height: 7),
@@ -1559,7 +1594,7 @@ class _TopListings extends StatelessWidget {
           final l = top[i];
           return SizedBox(
             width: 150,
-            child: Panel(
+            child: LxCard(
               onTap: () => context.push('/listing/${l.id}'),
               padding: const EdgeInsets.all(10),
               child: Column(
@@ -1671,7 +1706,7 @@ class _InventoryHealth extends StatelessWidget {
         ],
       ),
     );
-    return Panel(
+    return LxCard(
       onTap: () => context.go('/listings'),
       child: Column(
         children: [
@@ -1756,7 +1791,7 @@ class _Insights extends StatelessWidget {
       1,
       (m, d) => math.max(m, d.orders),
     );
-    return Panel(
+    return LxCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1850,4 +1885,454 @@ class _Insights extends StatelessWidget {
       ),
     );
   }
+}
+
+// ------------------------------------------------------------------ 3D liquid pieces
+
+/// Gradient header shell with glossy highlight, glow blobs and a 3D phone.
+class _LiquidHeader extends StatelessWidget {
+  const _LiquidHeader({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    const r = BorderRadius.vertical(bottom: Radius.circular(34));
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: r,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4C2BD9).withValues(alpha: 0.35),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: r,
+        child: Stack(
+          children: [
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF14104A),
+                      Color(0xFF3B23B8),
+                      Color(0xFF2F6BFF),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: -60,
+              top: -40,
+              child: _Glow(
+                color: const Color(0xFFB57BFF).withValues(alpha: 0.45),
+                size: 240,
+              ),
+            ),
+            Positioned(
+              left: -70,
+              bottom: -90,
+              child: _Glow(
+                color: const Color(0xFF22D3EE).withValues(alpha: 0.30),
+                size: 260,
+              ),
+            ),
+            Positioned(
+              right: -24,
+              top: MediaQuery.paddingOf(context).top + 52,
+              child: Opacity(
+                opacity: 0.55,
+                child: ShaderMask(
+                  blendMode: BlendMode.dstIn,
+                  shaderCallback: (r) => const RadialGradient(
+                    radius: 0.7,
+                    colors: [Colors.black, Colors.transparent],
+                    stops: [0.55, 1],
+                  ).createShader(r),
+                  child: Image.asset(
+                    'assets/img/listing/hero_details.png',
+                    width: 190,
+                  ),
+                ),
+              ),
+            ),
+            // Glossy top highlight ("liquid glass").
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.center,
+                      colors: [
+                        Colors.white.withValues(alpha: 0.12),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.color, required this.size});
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+    ),
+  );
+}
+
+/// Section title with a gradient accent bar and optional "View all" pill.
+class _Title extends StatelessWidget {
+  const _Title(this.title, {this.action, this.onAction});
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 5,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: LX.chip,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: LX.ink,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          if (action != null)
+            GestureDetector(
+              onTap: onAction,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE6DDFE)),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      action!,
+                      style: const TextStyle(
+                        color: LX.violet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: LX.violet,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Gradient icon in a soft rounded square.
+class _GIcon extends StatelessWidget {
+  const _GIcon(
+    this.icon, {
+    this.colors = const [Color(0xFF2F6BFF), Color(0xFF8E3DFF)],
+    this.size = 40,
+  });
+  final IconData icon;
+  final List<Color> colors;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: colors,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(size * 0.32),
+      boxShadow: [
+        BoxShadow(
+          color: colors.last.withValues(alpha: 0.35),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    foregroundDecoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(size * 0.32),
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.center,
+        colors: [
+          Colors.white.withValues(alpha: 0.3),
+          Colors.white.withValues(alpha: 0),
+        ],
+      ),
+    ),
+    child: Icon(icon, color: Colors.white, size: size * 0.52),
+  );
+}
+
+/// Colour pairs for gradient icons.
+const _gBlue = [Color(0xFF38BDF8), Color(0xFF2F6BFF)];
+const _gViolet = [Color(0xFFA78BFA), Color(0xFF7B3DF5)];
+const _gGreen = [Color(0xFF34D399), Color(0xFF16A34A)];
+const _gAmber = [Color(0xFFFCD34D), Color(0xFFF59E0B)];
+const _gRed = [Color(0xFFFB7185), Color(0xFFE11D48)];
+const _gCyan = [Color(0xFF67E8F9), Color(0xFF0891B2)];
+
+/// "List a phone" promo with a 3D illustration.
+class _SellCard extends StatelessWidget {
+  const _SellCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF3EEFF), Color(0xFFE9F2FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: LX.soft(0.10),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 6, 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sell your next phone',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: LX.ink,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Photos → details → price. GAMEX QC checks it and it goes live in the app.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: LX.muted,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: 170,
+                  child: LxButton(
+                    label: 'Add Listing',
+                    icon: Icons.add_rounded,
+                    height: 44,
+                    onTap: () => context.push('/listing/new'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Image.asset('assets/img/listing/hero_photos.png', width: 128),
+        ],
+      ),
+    );
+  }
+}
+
+/// Overall seller score from rating, dispatch, cancellations and QC.
+class _ScoreCard extends StatelessWidget {
+  const _ScoreCard({
+    required this.rating,
+    required this.cancelRate,
+    required this.qcPass,
+    required this.liveConv,
+  });
+  final double rating;
+  final double cancelRate;
+  final double qcPass;
+  final double liveConv;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = [
+      (
+        'Rating',
+        rating == 0 ? 0.8 : rating / 5,
+        rating == 0 ? 'New' : rating.toStringAsFixed(1),
+      ),
+      (
+        'Low cancels',
+        (1 - cancelRate / 20).clamp(0.0, 1.0),
+        '${cancelRate.toStringAsFixed(1)}%',
+      ),
+      ('QC pass', qcPass, '${(qcPass * 100).round()}%'),
+      ('Live → sale', liveConv, '${(liveConv * 100).round()}%'),
+    ];
+    final score =
+        (parts.fold<double>(0, (s, p) => s + p.$2) / parts.length * 100)
+            .round();
+    final color = score >= 80
+        ? LX.green
+        : score >= 60
+        ? const Color(0xFFF59E0B)
+        : LX.red;
+    return LxCard(
+      child: Row(
+        children: [
+          SizedBox(
+            width: 92,
+            height: 92,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: score / 100,
+                  strokeWidth: 10,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: const Color(0xFFEDEBFA),
+                  color: color,
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$score',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: color,
+                      ),
+                    ),
+                    const Text(
+                      '/ 100',
+                      style: TextStyle(fontSize: 11, color: LX.muted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Seller Score',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: LX.ink,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (final p in parts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 78,
+                          child: Text(
+                            p.$1,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: LX.muted,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: p.$2,
+                              minHeight: 6,
+                              backgroundColor: const Color(0xFFEDEBFA),
+                              color: LX.blue,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 38,
+                          child: Text(
+                            p.$3,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: LX.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<Color> _grad(Color c) {
+  if (c == C.primary) return _gBlue;
+  if (c == C.green) return _gGreen;
+  if (c == C.amber) return _gAmber;
+  if (c == C.violet) return _gViolet;
+  if (c == C.red) return _gRed;
+  if (c == C.cyan) return _gCyan;
+  return [Color.lerp(c, Colors.white, 0.3)!, c];
 }
