@@ -118,6 +118,10 @@ location ^~ /gamex/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 60s;
 }
+# Android App Links verification for https://<domain>/gamex/p/<id> share links.
+location = /.well-known/assetlinks.json {
+    proxy_pass http://127.0.0.1:8080/.well-known/assetlinks.json;
+}
 NGINX
 
 DOMAIN_RE="$(printf '%s' "$DOMAIN" | sed 's/\./\\./g')"

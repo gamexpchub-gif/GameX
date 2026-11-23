@@ -10,6 +10,7 @@ import express from 'express';
 import multer from 'multer';
 import { mountGrowth } from './growth.js';
 import { mountService } from './service.js';
+import { mountLaunch } from './launch.js';
 import { CHECKLIST, buildSeed, imeiFrom, titleOf } from './seed.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,10 +56,12 @@ function migrate() {
   for (const c of db.live) c.messages ??= [];
   growth?.migrate();
   service?.migrate();
+  launch?.migrate();
 }
 /** Growth features (offers, wallet, trade-in, alerts). Set up below. */
 let growth;
 let service;
+let launch;
 migrate();
 let saveTimer;
 function save() {
@@ -260,6 +263,8 @@ api.post('/orders', (req, res) => {
   if (!orderId || !customer || !address || !Array.isArray(items)) return bad(res, 400, 'Invalid order');
   const cust = find('customers', customer.id);
   if (cust && cust.status === 'blocked') return bad(res, 403, 'Your account is blocked. Contact support.');
+  const codErr = launch.checkCod(req.body);
+  if (codErr) return bad(res, 409, codErr);
   const moneyErr = growth.checkOrder(req.body);
   if (moneyErr) return bad(res, 409, moneyErr);
   const created = [];
@@ -317,6 +322,7 @@ api.post('/orders', (req, res) => {
   });
   if (items.length && !created.length) return bad(res, 409, 'These phones are no longer available');
   growth.onOrderPlaced(req.body, created);
+  service.recordPurchase(req.body);
   save();
   res.json({ ids: created });
 });
@@ -593,6 +599,7 @@ seller.get('/bootstrap', (req, res) => {
     live: db.live.filter((c) => c.sellerId === sid),
     claims: db.claims.filter((c) => c.sellerId === sid),
     offers: db.offers.filter((o) => o.sellerId === sid),
+    questions: db.questions.filter((q) => q.sellerId === sid),
     payouts: db.payouts.filter((p) => p.sellerId === sid),
     notifications: db.notifications.filter((n) => n.sellerId === sid || n.sellerId === null).map((n) => ({ ...n, read: n.read.includes(sid) })),
     insights: sellerInsights(sid),
@@ -731,6 +738,7 @@ seller.post('/orders/:id/:action', (req, res) => {
   if (!o || o.sellerId !== req.seller.id) return bad(res, 404, 'Order not found');
   const err = orderAction(o, req.params.action, req.body || {}, 'seller');
   if (err) return bad(res, 409, err);
+  if (req.params.action === 'ship') service.onShipped(o);
   save();
   res.json(o);
 });
@@ -1042,6 +1050,7 @@ admin.post('/reset', (_, res) => {
 });
 
 growth = mountGrowth({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive });
+launch = mountLaunch({ api, site, admin, D: () => db, save, now, uid, find, bad, log, adminBase: ADMIN_BASE });
 service = mountService({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive, notifyCustomer: growth.notifyCustomer });
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 

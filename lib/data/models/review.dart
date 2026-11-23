@@ -80,6 +80,7 @@ class Question {
     required this.text,
     required this.createdAt,
     this.answer,
+    this.answeredBy,
   });
 
   final String id;
@@ -88,16 +89,20 @@ class Question {
   final String text;
   final DateTime createdAt;
 
-  /// Answer from GAMEX; null while pending.
+  /// Answer from GAMEX or the seller; null while pending.
   final String? answer;
+
+  /// "GAMEX" or the seller's store name.
+  final String? answeredBy;
 
   factory Question.fromJson(Map<String, dynamic> j) => Question(
     id: j['id'] as String,
-    productKey: j['productKey'] as String,
+    productKey: (j['productKey'] ?? j['key']) as String,
     author: j['author'] as String,
     text: j['text'] as String,
     createdAt: DateTime.parse(j['createdAt'] as String),
     answer: j['answer'] as String?,
+    answeredBy: j['answeredBy'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -107,6 +112,7 @@ class Question {
     'text': text,
     'createdAt': createdAt.toIso8601String(),
     'answer': answer,
+    'answeredBy': answeredBy,
   };
 }
 

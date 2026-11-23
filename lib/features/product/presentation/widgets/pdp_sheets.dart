@@ -13,6 +13,7 @@ import '../../../../core/widgets/common.dart';
 import '../../../../data/models/product.dart';
 import '../../../../data/models/review.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../reviews/providers/community_provider.dart';
 import '../../../reviews/providers/reviews_provider.dart';
 import 'review_widgets.dart';
 
@@ -369,9 +370,16 @@ class _AllQuestionsState extends ConsumerState<_AllQuestions> {
       showAppSnack(context, 'Please type your question');
       return;
     }
-    await ref
-        .read(userQuestionsProvider.notifier)
-        .ask(widget.product.id, ref.read(authProvider)?.name ?? 'You', text);
+    final author = ref.read(authProvider)?.name ?? 'You';
+    try {
+      await ref
+          .read(communityApiProvider)
+          .ask(productKeyOf(widget.product.id), author, text);
+    } catch (_) {
+      await ref
+          .read(userQuestionsProvider.notifier)
+          .ask(widget.product.id, author, text);
+    }
     _c.clear();
     if (mounted) {
       showAppSnack(context, 'Question posted. We usually answer within 1 hour');
@@ -464,7 +472,11 @@ class QaCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  q.answer ?? 'Awaiting answer from GAMEX…',
+                  q.answer == null
+                      ? 'Awaiting answer from the seller…'
+                      : q.answeredBy == null
+                      ? q.answer!
+                      : '${q.answer!}\n— ${q.answeredBy}',
                   style: TextStyle(
                     height: 1.4,
                     color: q.answer == null

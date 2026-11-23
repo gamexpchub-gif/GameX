@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/storage.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/review.dart';
+import 'community_provider.dart';
 
 const _reviewsKey = 'user_reviews_v1';
 const _helpfulKey = 'helpful_votes_v1';
@@ -58,7 +59,9 @@ final helpfulProvider = NotifierProvider<HelpfulNotifier, Set<String>>(
 final reviewsProvider = Provider.family<List<Review>, String>((ref, productId) {
   final key = productKeyOf(productId);
   final mine = ref.watch(userReviewsProvider).where((r) => r.productKey == key);
-  return [...mine, ..._demoReviews(key)];
+  final server =
+      ref.watch(serverReviewsProvider(key)).asData?.value ?? const [];
+  return [...mine, ...server, ..._demoReviews(key)];
 });
 
 class RatingSummary {
@@ -143,7 +146,9 @@ final questionsProvider = Provider.family<List<Question>, String>((
   final mine = ref
       .watch(userQuestionsProvider)
       .where((q) => q.productKey == key);
-  return [...mine, ..._demoQuestions(key)];
+  final server =
+      ref.watch(serverQuestionsProvider(key)).asData?.value ?? const [];
+  return [...mine, ...server, ..._demoQuestions(key)];
 });
 
 // ───────────────────────────── Demo data ─────────────────────────────

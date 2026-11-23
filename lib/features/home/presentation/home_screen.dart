@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/i18n/i18n.dart';
 import '../../../core/widgets/common.dart';
 import '../../../core/widgets/glass.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -12,8 +13,8 @@ import '../../commerce/services/notification_service.dart';
 import '../../discover/presentation/widgets/home_discover.dart';
 import 'widgets/design_scale.dart';
 import 'widgets/hero_banner.dart';
-import 'widgets/home_header.dart';
 import 'widgets/home_compact.dart';
+import 'widgets/home_header.dart';
 import 'widgets/home_sections.dart';
 
 /// Brand pre-selected in "Popular Brands", as in the design.
@@ -114,7 +115,7 @@ class HomeScreen extends ConsumerWidget {
                   SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(
-                      title: 'Top Deals',
+                      title: 'Top Deals'.tr(context),
                       leading: Image.asset(
                         'assets/images/home/icon_sparkle.png',
                         width: 36 * k,

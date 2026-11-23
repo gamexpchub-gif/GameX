@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/app_config.dart';
+import '../../../core/i18n/i18n.dart';
 import '../../../core/storage.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/common.dart';
 import '../../splash/presentation/splash_screen.dart';
 import '../providers/auth_provider.dart';
+import 'otp_sheet.dart';
 
 const _img = 'assets/images/home';
 const _bg = Color(0xFFF3F4F8);
@@ -923,15 +926,62 @@ class _LoginFormState extends ConsumerState<_LoginForm> {
           const SizedBox(height: 8),
           _GradientButton(
             icon: Icons.login_rounded,
-            label: 'Login to GAMEX',
+            label: 'Login to GAMEX'.tr(context),
             onTap: _submit,
             loading: _loading,
           ),
           const SizedBox(height: 16),
           const _OrDivider(),
           const SizedBox(height: 14),
-          const _GoogleButton(),
+          _OtpButton(onDone: widget.onDone),
         ],
+      ),
+    );
+  }
+}
+
+/// "Login with OTP" (real SMS when the server has an SMS provider).
+class _OtpButton extends ConsumerWidget {
+  const _OtpButton({required this.onDone});
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(appConfigProvider).asData?.value;
+    if (cfg == null || !cfg.otpLogin) return const _GoogleButton();
+    return GestureDetector(
+      onTap: () async {
+        if (await showOtpLogin(context)) onDone();
+      },
+      child: Container(
+        height: _compact(context) ? 46 : 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFFE6E9F2)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2A3D8F).withValues(alpha: 0.08),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.sms_rounded, color: _blue),
+            const SizedBox(width: 10),
+            Text(
+              'Login with OTP'.tr(context),
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

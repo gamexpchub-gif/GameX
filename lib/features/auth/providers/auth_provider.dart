@@ -45,6 +45,46 @@ class AuthNotifier extends Notifier<AppUser?> {
     );
   }
 
+  /// Sends a 6-digit login code by SMS. Returns the code only when the
+  /// server runs in OTP test mode.
+  Future<String?> sendOtp(String phone) async {
+    try {
+      final j = await ref.read(apiProvider).post('/auth/otp/send', {
+        'phone': phone,
+      }) as Map;
+      return j['devCode'] as String?;
+    } on ApiException catch (e) {
+      throw AuthException(e.message);
+    }
+  }
+
+  /// Verifies the SMS code. Returns true when the account still needs a name.
+  Future<bool> verifyOtp(String phone, String code) async {
+    final Map j;
+    try {
+      j = await ref.read(apiProvider).post('/auth/otp/verify', {
+        'phone': phone,
+        'code': code,
+      }) as Map;
+    } on ApiException catch (e) {
+      throw AuthException(e.message);
+    }
+    final c = (j['customer'] as Map).cast<String, dynamic>();
+    await ref
+        .read(localStoreProvider)
+        .writeString('session_token_v1', j['token'] as String);
+    final name = (c['name'] as String? ?? '').trim();
+    await _setUser(
+      AppUser(
+        id: c['id'] as String,
+        name: name.isEmpty ? 'GAMEX Customer' : name,
+        email: c['email'] as String? ?? '',
+        phone: c['phone'] as String?,
+      ),
+    );
+    return j['isNew'] == true;
+  }
+
   /// Demo password reset: pretends to send an OTP.
   Future<void> requestPasswordReset(String identifier) =>
       Future<void>.delayed(const Duration(milliseconds: 800));

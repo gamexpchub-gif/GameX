@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/i18n/i18n.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/models/product.dart';
 import '../../../commerce/data/commerce_api.dart';
@@ -186,7 +187,7 @@ class _Tile extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          a.label,
+          a.label.tr(context),
           textAlign: TextAlign.center,
           maxLines: 2,
           style: const TextStyle(
@@ -344,7 +345,7 @@ class TrustStrip extends StatelessWidget {
                       Icon(icon, color: const Color(0xFFFFC542), size: 22),
                       const SizedBox(height: 4),
                       Text(
-                        label,
+                        label.tr(context),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
@@ -372,7 +373,7 @@ class ExploreAllButton extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: EdgeInsets.symmetric(horizontal: 30 * context.k),
     child: TButton(
-      label: 'Explore all phones',
+      label: 'Explore all phones'.tr(context),
       icon: Icons.grid_view_rounded,
       onTap: () => context.push('/explore', extra: const PhoneFilter()),
     ),

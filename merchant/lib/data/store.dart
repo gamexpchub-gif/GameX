@@ -85,6 +85,7 @@ class SellerData {
     this.payouts = const [],
     this.notices = const [],
     this.offers = const [],
+    this.questions = const [],
     this.insights = const Insights(),
     this.syncedAt,
     this.syncing = false,
@@ -97,6 +98,7 @@ class SellerData {
   final List<Payout> payouts;
   final List<Notice> notices;
   final List<BuyerOffer> offers;
+  final List<BuyerQuestion> questions;
   final Insights insights;
   final DateTime? syncedAt;
   final bool syncing;
@@ -113,6 +115,7 @@ class SellerData {
     List<Payout>? payouts,
     List<Notice>? notices,
     List<BuyerOffer>? offers,
+    List<BuyerQuestion>? questions,
     Insights? insights,
     DateTime? syncedAt,
     bool? syncing,
@@ -125,6 +128,7 @@ class SellerData {
     payouts: payouts ?? this.payouts,
     notices: notices ?? this.notices,
     offers: offers ?? this.offers,
+    questions: questions ?? this.questions,
     insights: insights ?? this.insights,
     syncedAt: syncedAt ?? this.syncedAt,
     syncing: syncing ?? this.syncing,
@@ -138,6 +142,7 @@ class SellerData {
     'payouts': payouts.map((e) => e.toJson()).toList(),
     'notifications': notices.map((e) => e.toJson()).toList(),
     'offers': offers.map((e) => e.toJson()).toList(),
+    'questions': questions.map((e) => e.toJson()).toList(),
     'insights': insights.toJson(),
     'syncedAt': syncedAt?.toIso8601String(),
   };
@@ -157,6 +162,8 @@ class SellerData {
     notices: _list(j['notifications'], Notice.fromJson)
       ..sort((a, b) => b.at.compareTo(a.at)),
     offers: _list(j['offers'], BuyerOffer.new)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+    questions: _list(j['questions'], BuyerQuestion.new)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
     insights: Insights.fromJson(
       (j['insights'] as Map?)?.cast<String, dynamic>() ?? const {},
@@ -306,6 +313,12 @@ class SyncNotifier extends Notifier<SellerData> {
     if (tradeInCollected) 'tradeInCollected': true,
   });
 
+  // ----- Questions -----
+
+  Future<void> answerQuestion(String id, String answer) => _do(
+    (sid) => _api.post('/seller/$sid/questions/$id/answer', {'answer': answer}),
+  );
+
   // ----- Offers -----
 
   /// accept | reject | counter (with [amount]).
@@ -400,6 +413,14 @@ final noticesProvider = Provider<List<Notice>>(
 
 final offersProvider = Provider<List<BuyerOffer>>(
   (ref) => ref.watch(syncProvider).offers,
+);
+
+final questionsProvider = Provider<List<BuyerQuestion>>(
+  (ref) => ref.watch(syncProvider).questions,
+);
+
+final openQuestionsProvider = Provider<int>(
+  (ref) => ref.watch(questionsProvider).where((q) => q.open).length,
 );
 
 final pendingOffersProvider = Provider<int>(

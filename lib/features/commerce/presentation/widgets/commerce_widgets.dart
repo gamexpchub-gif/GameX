@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/i18n/i18n.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_image.dart';
 import '../../../../data/models/product.dart';
@@ -686,7 +687,7 @@ class PdpCommerceSection extends ConsumerWidget {
           children: [
             Expanded(
               child: TButton(
-                label: 'Make an offer',
+                label: 'Make an offer'.tr(context),
                 icon: Icons.handshake_rounded,
                 height: 48,
                 onTap: p.inStock ? () => showMakeOfferSheet(context, p) : null,
@@ -695,7 +696,7 @@ class PdpCommerceSection extends ConsumerWidget {
             const SizedBox(width: 10),
             Expanded(
               child: TGhost(
-                label: p.inStock ? 'Price alert' : 'Notify me',
+                label: (p.inStock ? 'Price alert' : 'Notify me').tr(context),
                 icon: Icons.notifications_active_rounded,
                 height: 48,
                 color: TX.violet,

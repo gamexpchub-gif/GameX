@@ -5,10 +5,11 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api.dart';
 import '../../../core/storage.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/cart_item.dart';
 import '../../../data/models/order.dart';
+import '../../../data/models/review.dart' show productKeyOf;
+import '../../auth/providers/auth_provider.dart';
 import '../../commerce/data/tradein.dart';
 
 class OrdersNotifier extends Notifier<List<Order>> {
@@ -94,8 +95,10 @@ class OrdersNotifier extends Notifier<List<Order>> {
     TradeInQuote? tradeIn,
     double walletUse = 0,
     double total = 0,
+    String? orderId,
+    String? paymentRef,
   }) async {
-    final id = newOrderId(DateTime.now());
+    final id = orderId ?? newOrderId(DateTime.now());
     final sellerItems = items.where((i) => i.product.id.startsWith('GXL'));
     final user = ref.read(authProvider);
     // Marketplace items, wallet money and trade-ins are confirmed by the
@@ -129,6 +132,8 @@ class OrdersNotifier extends Notifier<List<Order>> {
           },
       ],
       'amounts': {'total': total.round(), 'walletUse': walletUse.round()},
+      'productKeys': [for (final i in items) productKeyOf(i.product.id)],
+      'paymentRef': ?paymentRef,
       if (tradeIn?.serverId != null) 'tradeInId': tradeIn!.serverId,
     });
     if (mustConfirm) {

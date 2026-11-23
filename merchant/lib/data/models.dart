@@ -773,3 +773,18 @@ class BuyerOffer {
 
   Map<String, dynamic> toJson() => j;
 }
+
+/// A buyer's question on one of the seller's listings.
+class BuyerQuestion {
+  const BuyerQuestion(this.j);
+  final Map<String, dynamic> j;
+  String get id => j['id'] as String;
+  String get listingId => j['key'] as String;
+  String get author => j['author'] as String? ?? 'Buyer';
+  String get text => j['text'] as String;
+  String? get answer => j['answer'] as String?;
+  DateTime get createdAt =>
+      DateTime.tryParse('${j['createdAt']}') ?? DateTime.now();
+  bool get open => answer == null;
+  Map<String, dynamic> toJson() => j;
+}

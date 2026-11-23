@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/i18n/i18n.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_image.dart';
 import '../../../../data/models/product.dart';
@@ -260,7 +261,9 @@ class ForYouRail extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         HomeSectionTitle(
-          title: personal ? 'Picked for You' : 'Best Value Right Now',
+          title: (personal ? 'Picked for You' : 'Best Value Right Now').tr(
+            context,
+          ),
           leading: const Icon(
             Icons.auto_awesome_rounded,
             color: Color(0xFF8E3DFF),
@@ -297,7 +300,7 @@ class RecentlyViewedRail extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         HomeSectionTitle(
-          title: 'Recently Viewed',
+          title: 'Recently Viewed'.tr(context),
           leading: const Icon(Icons.history_rounded, color: Color(0xFF2F6BFF)),
           trailing: TextButton(
             onPressed: () => ref.read(recentlyViewedProvider.notifier).clear(),

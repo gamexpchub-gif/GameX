@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/i18n/i18n.dart';
 import '../../../core/widgets/server_sheet.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
@@ -936,7 +937,7 @@ class _ListCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                rows[i].$2,
+                                rows[i].$2.tr(context),
                                 style: TextStyle(
                                   fontSize: 20 * d,
                                   fontWeight: FontWeight.w700,
@@ -1252,6 +1253,12 @@ class _SettingsCard extends ConsumerWidget {
               context.push('/login?from=${Uri.encodeComponent('/profile')}');
             }
           },
+        ),
+        (
+          Icons.translate_rounded,
+          'Language',
+          'English • हिन्दी • বাংলা',
+          () => showLanguageSheet(context, ref),
         ),
         (
           Icons.notifications_none_rounded,

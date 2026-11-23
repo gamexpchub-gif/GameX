@@ -8,6 +8,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/storage.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/commerce_api.dart';
+import 'push_service.dart';
 
 /// Server notifications (offer replies, price drops, back in stock, wallet,
 /// orders) shown as real system notifications.
@@ -54,6 +55,19 @@ class NotificationFeed extends Notifier<List<CustomerNotif>> {
           if (link != null && link.startsWith('/')) appRouter.push(link);
         },
       );
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              channelId,
+              'Deals & alerts',
+              description:
+                  'Price drops, back in stock, offers, orders and wallet',
+              importance: Importance.high,
+            ),
+          );
       _ready = true;
     } catch (_) {
       // Not available (tests, unsupported platform).
@@ -184,7 +198,15 @@ class _NotificationsHostState extends ConsumerState<NotificationsHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future.microtask(() => _feed.refresh());
+    Future.microtask(() {
+      _feed.refresh();
+      ref.read(pushServiceProvider).start();
+    });
+    ref.listenManual(authProvider, (prev, next) {
+      if (next != null && next.id != prev?.id) {
+        ref.read(pushServiceProvider).onLogin();
+      }
+    });
     _timer = Timer.periodic(
       const Duration(seconds: 45),
       (_) => _feed.refresh(),

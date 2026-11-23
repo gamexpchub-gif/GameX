@@ -13,6 +13,7 @@ import '../../../../core/widgets/app_image.dart';
 import '../../../../core/widgets/common.dart';
 import '../../../../data/models/review.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../reviews/providers/community_provider.dart';
 import '../../../reviews/providers/reviews_provider.dart';
 
 const kMaxReviewPhotos = 5;
@@ -668,27 +669,29 @@ class _WriteReviewState extends ConsumerState<_WriteReview> {
       return showAppSnack(context, 'Please write at least 10 characters');
     }
     final user = ref.read(authProvider);
-    await ref
-        .read(userReviewsProvider.notifier)
-        .add(
-          Review(
-            id: 'u${DateTime.now().microsecondsSinceEpoch}',
-            productKey: productKeyOf(widget.productId),
-            author: user?.name ?? 'You',
-            rating: _rating,
-            title: _title.text.trim().isEmpty
-                ? _labels[_rating]
-                : _title.text.trim(),
-            body: _body.text.trim(),
-            createdAt: DateTime.now(),
-            media: [
-              for (final p in _photos) ReviewMedia(p),
-              if (_video != null) ReviewMedia(_video!, isVideo: true),
-            ],
-            verified: user != null,
-            variant: widget.variant,
-          ),
-        );
+    final key = productKeyOf(widget.productId);
+    final review = Review(
+      id: 'u${DateTime.now().microsecondsSinceEpoch}',
+      productKey: key,
+      author: user?.name ?? 'You',
+      rating: _rating,
+      title: _title.text.trim().isEmpty ? _labels[_rating] : _title.text.trim(),
+      body: _body.text.trim(),
+      createdAt: DateTime.now(),
+      media: [
+        for (final p in _photos) ReviewMedia(p),
+        if (_video != null) ReviewMedia(_video!, isVideo: true),
+      ],
+      // "Verified buyer" only when this account ordered the phone.
+      verified: ref.read(boughtProvider(key)),
+      variant: widget.variant,
+    );
+    try {
+      await ref.read(communityApiProvider).postReview(review);
+    } catch (_) {
+      // Offline or not logged in: keep it on this device.
+      await ref.read(userReviewsProvider.notifier).add(review);
+    }
     if (!mounted) return;
     Navigator.pop(context);
     showAppSnack(context, 'Thanks! Your review is published');

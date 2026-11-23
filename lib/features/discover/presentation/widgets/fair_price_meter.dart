@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/i18n/i18n.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/models/product.dart';
 import '../../../trust/presentation/widgets/trust_ui.dart';
@@ -115,8 +116,8 @@ class FairPriceMeter extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Fair Price meter',
+                    Text(
+                      'Fair Price meter'.tr(context),
                       style: TextStyle(
                         fontSize: 12,
                         color: TX.muted,
@@ -133,7 +134,7 @@ class FairPriceMeter extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  fair.verdict.label,
+                  fair.verdict.label.tr(context),
                   style: TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w900,

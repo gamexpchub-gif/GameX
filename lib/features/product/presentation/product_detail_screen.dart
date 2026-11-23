@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../core/api.dart' show kDefaultApi;
+import '../../../core/i18n/i18n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_image.dart';
@@ -15,10 +18,10 @@ import '../../../data/models/review.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../discover/presentation/widgets/fair_price_meter.dart';
 import '../../discover/presentation/widgets/pdp_discover_actions.dart';
 import '../../discover/providers/discover_providers.dart';
-import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../home/presentation/widgets/design_scale.dart' show HomeColors;
 import '../../home/presentation/widgets/home_sheets.dart';
 import '../../reviews/providers/reviews_provider.dart';
@@ -34,6 +37,23 @@ extension PdpScale on BuildContext {
 }
 
 const _img = 'assets/images/home';
+
+/// Public link that opens this phone in the app (or a web preview).
+String productLink(String id) => '$kDefaultApi/p/$id';
+
+/// Opens the system share sheet (WhatsApp etc.) with the product link.
+Future<void> shareProduct(
+  Product p, {
+  double? price,
+}) => SharePlus.instance.share(
+  ShareParams(
+    subject: p.name,
+    text:
+        '${p.name} for ${formatPrice(price ?? p.price)} on GAMEX\n'
+        'Certified pre-owned • QC checked • open-box delivery • 7-day returns\n'
+        '${productLink(p.id)}',
+  ),
+);
 
 class ProductDetailScreen extends ConsumerWidget {
   const ProductDetailScreen({super.key, required this.productId});
@@ -420,12 +440,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                         size: 34 * d,
                         color: HomeColors.ink,
                       ),
-                      () {
-                        Clipboard.setData(
-                          ClipboardData(text: 'https://gamex.shop/p/${p.id}'),
-                        );
-                        showAppSnack(context, 'Product link copied');
-                      },
+                      () => shareProduct(p, price: _price),
                     ),
                     SizedBox(height: 11 * d),
                     circle(
@@ -1249,7 +1264,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
               d: d,
               filled: false,
               icon: Icons.shopping_cart_outlined,
-              label: 'Add to Cart',
+              label: 'Add to Cart'.tr(context),
               onTap: p.inStock ? () => _add(buy: false) : null,
             ),
           ),
@@ -1259,7 +1274,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
               d: d,
               filled: true,
               icon: Icons.bolt_rounded,
-              label: p.inStock ? 'Buy Now' : 'Sold Out',
+              label: p.inStock ? 'Buy Now'.tr(context) : 'Sold Out',
               onTap: p.inStock ? () => _add(buy: true) : null,
             ),
           ),

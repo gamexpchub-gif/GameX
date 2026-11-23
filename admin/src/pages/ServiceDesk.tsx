@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarClock, CheckCircle2, HandCoins, PackageCheck, Smartphone, Truck, UserCog, Wrench, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, HandCoins, MessageCircleQuestion, Star, PackageCheck, Smartphone, Truck, UserCog, Wrench, XCircle } from 'lucide-react';
 import { ServiceJob, act, ago, fmtDateTime, inr, useDB } from '../store';
 import { Badge, Button, Card, Empty, PageHeader, Tabs, cx, toast } from '../ui';
 import type { Tone } from '../ui';
@@ -33,7 +33,14 @@ const modeLabel: Record<string, string> = { pickup: 'Pickup & drop', doorstep: '
 export default function ServiceDesk() {
   const repairs = useDB((d) => d.repairs);
   const sells = useDB((d) => d.sellRequests);
-  const [tab, setTab] = useState<'repairs' | 'sell'>('repairs');
+  const [tab, setTab] = useState<'repairs' | 'sell' | 'qa' | 'reviews'>('repairs');
+  const questions = useDB((d) => d.questions);
+  const reviews = useDB((d) => d.reviews);
+  const listings = useDB((d) => d.listings);
+  const titleOf = (key: string) => {
+    const l = listings.find((x) => x.id === key);
+    return l ? `${l.brand} ${l.model}` : key;
+  };
 
   const run = (kind: 'repairs' | 'sell-requests', j: ServiceJob, action: string) => {
     let body: Record<string, unknown> = {};
@@ -92,10 +99,84 @@ export default function ServiceDesk() {
           items={[
             { id: 'repairs', label: 'Repairs', count: repairs.length },
             { id: 'sell', label: 'Sell to GAMEX', count: sells.length },
+            { id: 'qa', label: 'Buyer Q&A', count: questions.filter((q) => !q.answer).length },
+            { id: 'reviews', label: 'Reviews', count: reviews.length },
           ]}
         />
       </div>
-      {(tab === 'repairs' ? repairs : sells).length === 0 ? (
+      {tab === 'qa' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {questions.length === 0 && (
+            <Card>
+              <Empty icon={MessageCircleQuestion} title="No questions yet" text="Buyers ask from the product page. Sellers answer in the seller app; GAMEX can answer here." />
+            </Card>
+          )}
+          {questions.map((q) => (
+            <Card key={q.id}>
+              <p className="text-xs font-semibold text-muted">{titleOf(q.key)}</p>
+              <p className="mt-1 font-bold text-ink">Q: {q.text}</p>
+              <p className="text-xs text-slate-400">
+                {q.author} • {ago(q.createdAt)}
+              </p>
+              {q.answer ? (
+                <p className="mt-2 text-sm text-emerald-700">
+                  A: {q.answer} <span className="text-slate-400">— {q.answeredBy}</span>
+                </p>
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    icon={MessageCircleQuestion}
+                    onClick={() => {
+                      const a = window.prompt('Answer as GAMEX:');
+                      if (a) act('POST', `/questions/${q.id}/answer`, { answer: a }).then(() => toast('Answer posted'));
+                    }}
+                  >
+                    Answer as GAMEX
+                  </Button>
+                  <Button size="sm" variant="danger" icon={XCircle} onClick={() => act('PATCH', `/questions/${q.id}`, { hidden: true })}>
+                    Hide
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === 'reviews' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {reviews.length === 0 && (
+            <Card>
+              <Empty icon={Star} title="No reviews yet" text="Reviews from buyers appear here. Verified buyers are marked automatically." />
+            </Card>
+          )}
+          {reviews.map((r) => (
+            <Card key={r.id} className={cx(r.hidden && 'opacity-50')}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-bold text-ink">
+                    {'★'.repeat(r.rating)}
+                    <span className="text-slate-300">{'★'.repeat(5 - r.rating)}</span> {r.title}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {r.author} • {titleOf(r.key)} • {ago(r.createdAt)}
+                  </p>
+                </div>
+                {r.verified ? <Badge tone="green" dot>Verified buyer</Badge> : <Badge tone="slate">Not verified</Badge>}
+              </div>
+              <p className="mt-2 text-sm text-ink">{r.body}</p>
+              <div className="mt-3">
+                <Button size="sm" variant={r.hidden ? 'secondary' : 'danger'} onClick={() => act('PATCH', `/reviews/${r.id}`, { hidden: !r.hidden })}>
+                  {r.hidden ? 'Show again' : 'Hide review'}
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {(tab === 'qa' || tab === 'reviews') ? null : (tab === 'repairs' ? repairs : sells).length === 0 ? (
         <Card>
           <Empty
             icon={tab === 'repairs' ? Wrench : Smartphone}

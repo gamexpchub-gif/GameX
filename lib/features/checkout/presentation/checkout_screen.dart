@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/app_config.dart';
+import '../../../core/i18n/i18n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/validators.dart';
@@ -22,6 +24,7 @@ import '../../commerce/data/protection.dart';
 import '../../commerce/presentation/emi_screen.dart';
 import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../commerce/providers/checkout_extras.dart';
+import '../../commerce/services/razorpay_service.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../providers/address_provider.dart';
 import 'widgets/address_sheets.dart';
@@ -82,6 +85,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   double _total(CartSummary s, Address? a) => _totals(s, a).total;
 
+  /// Why Cash on Delivery is not allowed for this order (null = allowed).
+  /// The server enforces the same rules.
+  String? _codBlockReason(AppConfig cfg, double total) {
+    if (!cfg.codEnabled) {
+      return 'Cash on Delivery is paused. Please pay online.';
+    }
+    final orders = ref.read(ordersProvider);
+    final delivered = orders.any((o) => o.status == OrderStatus.delivered);
+    final open = orders
+        .where(
+          (o) =>
+              o.paymentMethod == PaymentMethod.cashOnDelivery &&
+              (o.isProcessing || o.isShipped),
+        )
+        .length;
+    if (open >= cfg.codMaxOpen) {
+      return 'You already have $open Cash on Delivery orders on the way. Please pay online.';
+    }
+    if (!delivered && total > cfg.codNewLimit) {
+      return 'Cash on Delivery is available up to ${formatPrice(cfg.codNewLimit)} on your first order. Please pay online.';
+    }
+    return null;
+  }
+
   /// "No-cost EMI • HDFC Bank • 6 × ₹8,333" etc.
   String? _paymentNote(double total) {
     final pay = _pay;
@@ -126,7 +153,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
       return;
     }
-    if (_payment != PaymentMethod.cashOnDelivery &&
+    final cfg = ref.read(appConfigProvider).asData?.value ?? AppConfig.offline;
+    final codBlock = _codBlockReason(cfg, totals.total);
+    if (_payment == PaymentMethod.cashOnDelivery && codBlock != null) {
+      showAppSnack(context, codBlock);
+      return;
+    }
+    final gateway = cfg.razorpay && _payment != PaymentMethod.cashOnDelivery;
+    if (!gateway &&
+        _payment != PaymentMethod.cashOnDelivery &&
         _payment != PaymentMethod.payLater &&
         !(_payForm.currentState?.validate() ?? false)) {
       showAppSnack(context, 'Please complete your payment details');
@@ -138,6 +173,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
     FocusScope.of(context).unfocus();
     setState(() => _placing = true);
+    final orderId = OrdersNotifier.newOrderId(DateTime.now());
+    String? paymentRef;
+    if (gateway) {
+      try {
+        paymentRef = await ref
+            .read(razorpayServiceProvider)
+            .pay(
+              keyId: cfg.razorpayKey!,
+              orderId: orderId,
+              amount: totals.total,
+              method: _payment,
+              description: '${items.length} item(s) • order $orderId',
+            );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _placing = false);
+        showAppSnack(context, '$e');
+        return;
+      }
+      if (!mounted) return;
+    }
     final total = _total(summary, address);
 
     // Payment / order processing overlay.
@@ -164,6 +220,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             tradeIn: totals.tradeIn > 0 ? ref.read(tradeInProvider) : null,
             walletUse: totals.wallet,
             total: totals.total,
+            orderId: orderId,
+            paymentRef: paymentRef,
           );
     } catch (e) {
       if (!mounted) return;
@@ -211,7 +269,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       backgroundColor: const Color(0xFFF1F4FD),
       appBar: AppBar(
         backgroundColor: const Color(0xFFF0F4FF),
-        title: const Text('Checkout'),
+        title: Text('Checkout'.tr(context)),
         actions: const [
           Padding(
             padding: EdgeInsets.only(right: 16),
@@ -365,7 +423,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       onPressed: _placing ? null : _placeOrder,
                       child: FittedBox(
                         child: Text(switch (_payment) {
-                          PaymentMethod.cashOnDelivery => 'Place Order',
+                          PaymentMethod.cashOnDelivery => 'Place Order'.tr(
+                            context,
+                          ),
                           PaymentMethod.emi => 'Pay with EMI',
                           PaymentMethod.payLater => 'Buy now, pay later',
                           _ => 'Pay ${formatPrice(totals.total)}',
@@ -654,9 +714,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget? _paymentDetails(PaymentMethod m, CartSummary s, Address? a) {
     switch (m) {
       case PaymentMethod.cashOnDelivery:
+        final block = _codBlockReason(
+          ref.read(appConfigProvider).asData?.value ?? AppConfig.offline,
+          _total(s, a),
+        );
         return Text(
-          'Pay ${formatPrice(_total(s, a))} to the delivery agent. You can check the phone and verify the IMEI before paying.',
-          style: const TextStyle(fontSize: 12.5, height: 1.4),
+          block ??
+              'Pay ${formatPrice(_total(s, a))} to the delivery agent. You can check the phone and verify the IMEI before paying.',
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color: block == null ? null : AppColors.danger,
+            fontWeight: block == null ? null : FontWeight.w700,
+          ),
+        );
+      case PaymentMethod.bkash when _gateway:
+      case PaymentMethod.nagad when _gateway:
+        return const Text(
+          'You will pay securely on the Razorpay screen after tapping Pay.',
+          style: TextStyle(fontSize: 12.5, height: 1.4),
         );
       case PaymentMethod.bkash:
         return TextFormField(
@@ -764,74 +840,82 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Widget _cardFields() => Column(
-    children: [
-      TextFormField(
-        controller: _cardNumber,
-        keyboardType: TextInputType.number,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          _CardNumberFormatter(),
-        ],
-        decoration: const InputDecoration(
-          labelText: 'Card number',
-          hintText: '1234 5678 9012 3456',
-          prefixIcon: Icon(Icons.credit_card_rounded),
-          isDense: true,
-        ),
-        validator: Validators.cardNumber,
-      ),
-      const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: _cardExpiry,
+  bool get _gateway =>
+      ref.read(appConfigProvider).asData?.value.razorpay ?? false;
+
+  Widget _cardFields() => _gateway
+      ? const Text(
+          'Card details are entered securely on the Razorpay screen (PCI-DSS compliant). GAMEX never sees your card number.',
+          style: TextStyle(fontSize: 12.5, height: 1.4),
+        )
+      : Column(
+          children: [
+            TextFormField(
+              controller: _cardNumber,
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                _ExpiryFormatter(),
+                _CardNumberFormatter(),
               ],
               decoration: const InputDecoration(
-                labelText: 'Expiry',
-                hintText: 'MM/YY',
+                labelText: 'Card number',
+                hintText: '1234 5678 9012 3456',
+                prefixIcon: Icon(Icons.credit_card_rounded),
                 isDense: true,
               ),
-              validator: Validators.cardExpiry,
+              validator: Validators.cardNumber,
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextFormField(
-              controller: _cardCvv,
-              keyboardType: TextInputType.number,
-              obscureText: true,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(4),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _cardExpiry,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      _ExpiryFormatter(),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Expiry',
+                      hintText: 'MM/YY',
+                      isDense: true,
+                    ),
+                    validator: Validators.cardExpiry,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _cardCvv,
+                    keyboardType: TextInputType.number,
+                    obscureText: true,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'CVV',
+                      hintText: '•••',
+                      isDense: true,
+                    ),
+                    validator: Validators.cvv,
+                  ),
+                ),
               ],
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _cardName,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
-                labelText: 'CVV',
-                hintText: '•••',
+                labelText: 'Name on card',
                 isDense: true,
               ),
-              validator: Validators.cvv,
+              validator: (v) => Validators.required(v, 'Name'),
             ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 10),
-      TextFormField(
-        controller: _cardName,
-        textCapitalization: TextCapitalization.characters,
-        decoration: const InputDecoration(
-          labelText: 'Name on card',
-          isDense: true,
-        ),
-        validator: (v) => Validators.required(v, 'Name'),
-      ),
-    ],
-  );
+          ],
+        );
 
   // ── Protection ──
   Widget _protectionCard() {

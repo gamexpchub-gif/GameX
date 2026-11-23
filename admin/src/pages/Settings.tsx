@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { RotateCcw, Save } from 'lucide-react';
-import { Settings as S, inr, log, resetDemo, update, useDB } from '../store';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, CircleDashed, RotateCcw, Save, ShieldAlert } from 'lucide-react';
+import { Settings as S, act, api, inr, log, resetDemo, update, useDB } from '../store';
 import { Button, Card, Field, PageHeader, Toggle, inputCls, toast } from '../ui';
 
 export default function Settings() {
@@ -107,7 +107,71 @@ export default function Settings() {
             </div>
           </div>
         </Card>
+        <LaunchCard />
       </div>
     </>
+  );
+}
+
+type Cfg = { otp: string; payments: string; push: boolean; courier: boolean; cod: { enabled: boolean; newAccountLimit: number; maxOpen: number } };
+
+/** Live-service status (keys live in /etc/gamex.env on the server) + COD fraud limits. */
+function LaunchCard() {
+  const settings = useDB((d) => d.settings) as unknown as { codLimitNew?: number; codMaxOpen?: number };
+  const [cfg, setCfg] = useState<Cfg | null>(null);
+  const [limit, setLimit] = useState(settings.codLimitNew ?? 15000);
+  const [maxOpen, setMaxOpen] = useState(settings.codMaxOpen ?? 2);
+  useEffect(() => {
+    api<Cfg>('GET', '/config').then(setCfg).catch(() => setCfg(null));
+  }, []);
+  const items: [string, boolean, string, string][] = cfg
+    ? [
+        ['SMS OTP login', cfg.otp === 'msg91' || cfg.otp === 'twilio', cfg.otp === 'dev' ? 'Test mode (codes shown in app)' : cfg.otp === 'off' ? 'Off - add MSG91 or Twilio keys' : `Live via ${cfg.otp}`, 'MSG91_AUTH_KEY, MSG91_TEMPLATE_ID'],
+        ['Payment gateway', cfg.payments === 'razorpay', cfg.payments === 'razorpay' ? 'Razorpay live' : 'Demo payments', 'RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET'],
+        ['Push notifications', cfg.push, cfg.push ? 'Firebase connected' : 'In-app only - add Firebase', 'FCM_SERVICE_ACCOUNT'],
+        ['Courier', cfg.courier, cfg.courier ? 'Shiprocket connected' : 'Simulated tracking', 'SHIPROCKET_EMAIL, SHIPROCKET_PASSWORD'],
+      ]
+    : [];
+  return (
+    <Card className="xl:col-span-2">
+      <p className="mb-1 font-bold text-ink">Launch setup</p>
+      <p className="mb-4 text-sm text-muted">Live services switch on when their keys are added to /etc/gamex.env on the server (see deploy/gamex.env.example), then restart GAMEX.</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {items.map(([t, on, text, keys]) => (
+          <div key={t} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
+            {on ? <CheckCircle2 className="mt-0.5 text-emerald-500" size={20} /> : <CircleDashed className="mt-0.5 text-amber-500" size={20} />}
+            <div>
+              <p className="font-semibold text-ink">{t}</p>
+              <p className="text-sm text-muted">{text}</p>
+              {!on && <p className="mt-1 font-mono text-[11px] text-slate-400">{keys}</p>}
+            </div>
+          </div>
+        ))}
+        {!cfg && <p className="text-sm text-muted">Loading…</p>}
+      </div>
+      <div className="mt-5 flex flex-wrap items-end gap-4 rounded-xl bg-amber-50 p-4">
+        <ShieldAlert className="text-amber-600" size={22} />
+        <div className="min-w-[200px] flex-1">
+          <p className="font-semibold text-ink">COD fraud protection</p>
+          <p className="text-sm text-muted">New accounts (no delivered order) can use COD only up to this amount. Accounts with 2+ doorstep refusals lose COD.</p>
+        </div>
+        <Field label="New-account COD limit (₹)">
+          <input type="number" className={inputCls} value={limit} onChange={(e) => setLimit(Number(e.target.value))} />
+        </Field>
+        <Field label="Max open COD orders">
+          <input type="number" className={inputCls} value={maxOpen} onChange={(e) => setMaxOpen(Number(e.target.value))} />
+        </Field>
+        <Button
+          icon={Save}
+          onClick={() =>
+            act('PUT', '/launch-settings', { codLimitNew: limit, codMaxOpen: maxOpen })
+              .then(() => toast(`COD limits saved • ${inr(limit)} for new accounts`))
+              .catch((e: Error) => toast(e.message))
+          }
+        >
+          Save limits
+        </Button>
+      </div>
+    </Card>
   );
 }

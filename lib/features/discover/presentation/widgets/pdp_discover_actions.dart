@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../../core/i18n/i18n.dart';
 import '../../../../data/models/product.dart';
 import '../../../trust/presentation/widgets/trust_ui.dart';
 import '../../data/phone_filter.dart';
@@ -65,7 +66,7 @@ class PdpDiscoverActions extends ConsumerWidget {
           icon: on ? Icons.check_rounded : Icons.compare_arrows_rounded,
           label: on
               ? (n >= 2 ? 'Compare now ($n)' : 'Added to compare')
-              : 'Add to compare',
+              : 'Add to compare'.tr(context),
           active: on,
           onTap: () => on && n >= 2
               ? context.push('/compare')
@@ -74,7 +75,7 @@ class PdpDiscoverActions extends ConsumerWidget {
         const SizedBox(width: 10),
         button(
           icon: Icons.travel_explore_rounded,
-          label: 'Similar in budget',
+          label: 'Similar in budget'.tr(context),
           onTap: () => context.push(
             '/explore',
             extra: PhoneFilter(

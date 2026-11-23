@@ -68,6 +68,52 @@ async function shiprocketScans(awb) {
   }
 }
 
+/** Books a real Shiprocket shipment for an order. Returns { awb, courier } or null. */
+export async function createShiprocketShipment(o, seller) {
+  try {
+    const token = await shiprocketToken();
+    if (!token) return null;
+    const h = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const [first, ...rest] = String(o.buyer || 'Customer').split(' ');
+    const created = await (
+      await fetch('https://apiv2.shiprocket.in/v1/external/orders/create/adhoc', {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify({
+          order_id: o.id,
+          order_date: o.placedAt.slice(0, 16).replace('T', ' '),
+          pickup_location: process.env.SHIPROCKET_PICKUP || 'Primary',
+          billing_customer_name: first,
+          billing_last_name: rest.join(' ') || '.',
+          billing_address: o.address || o.city,
+          billing_city: o.city,
+          billing_pincode: o.pincode || '400001',
+          billing_state: stateOf(o.city) || o.city,
+          billing_country: 'India',
+          billing_email: 'orders@gamex.in',
+          billing_phone: String(o.phone || '').replace(/\D/g, '').slice(-10),
+          shipping_is_billing: true,
+          order_items: [{ name: o.item, sku: o.listingId, units: 1, selling_price: o.price, hsn: 8517 }],
+          payment_method: o.payment === 'COD' ? 'COD' : 'Prepaid',
+          sub_total: o.payable ?? o.price,
+          length: 18, breadth: 12, height: 6, weight: 0.5,
+        }),
+      })
+    ).json();
+    if (!created.shipment_id) throw new Error(created.message || 'order not created');
+    const awb = await (
+      await fetch('https://apiv2.shiprocket.in/v1/external/courier/assign/awb', { method: 'POST', headers: h, body: JSON.stringify({ shipment_id: created.shipment_id }) })
+    ).json();
+    const data = awb?.response?.data;
+    if (!data?.awb_code) throw new Error(awb.message || 'AWB not assigned');
+    await fetch('https://apiv2.shiprocket.in/v1/external/courier/generate/pickup', { method: 'POST', headers: h, body: JSON.stringify({ shipment_id: [created.shipment_id] }) });
+    return { awb: data.awb_code, courier: data.courier_name || 'Shiprocket', shipmentId: created.shipment_id, seller: seller?.id };
+  } catch (e) {
+    console.warn('[shiprocket] create failed:', e.message);
+    return null;
+  }
+}
+
 export const courierLive = () => !!(process.env.SHIPROCKET_EMAIL && process.env.SHIPROCKET_PASSWORD);
 
 /** Simulated courier scans for demo AWBs (no courier account connected). */
@@ -339,5 +385,140 @@ export function mountService(ctx) {
     res.json(s);
   });
 
-  return { migrate, trackOne };
+  // ------------------------------------------------ reviews & questions --
+  /** Records what a customer bought (for "Verified Buyer"). */
+  function recordPurchase(body) {
+    const cid = body?.customer?.id;
+    const keys = Array.isArray(body?.productKeys) ? body.productKeys.map(String).slice(0, 20) : [];
+    if (!cid || cid === 'guest' || !keys.length) return;
+    D().purchases.unshift({ customerId: cid, orderId: body.orderId, keys, at: now() });
+  }
+  const isBuyer = (cid, key) =>
+    D().purchases.some((p) => p.customerId === cid && p.keys.includes(key)) ||
+    D().orders.some((o) => o.customerId === cid && o.listingId === key && o.stage !== 'cancelled');
+
+  const reviewView = (r) => ({ ...r, customerId: undefined });
+
+  api.get('/reviews', (req, res) => {
+    const key = String(req.query.key || '');
+    const list = D().reviews.filter((r) => r.key === key && !r.hidden);
+    res.json(list.map(reviewView));
+  });
+
+  api.post('/reviews', (req, res) => {
+    const b = req.body || {};
+    const rating = Math.round(Number(b.rating));
+    if (!b.customerId || !b.key || !(rating >= 1 && rating <= 5)) return bad(res, 400, 'Rating and product are required');
+    if (String(b.body || '').trim().length < 10) return bad(res, 400, 'Please write at least 10 characters');
+    const db = D();
+    const existing = db.reviews.find((r) => r.key === b.key && r.customerId === b.customerId);
+    const r = existing || { id: uid('RV'), key: b.key, customerId: b.customerId, helpful: 0, createdAt: now() };
+    Object.assign(r, {
+      author: String(b.author || 'Customer').slice(0, 40),
+      rating,
+      title: String(b.title || '').slice(0, 80),
+      body: String(b.body).slice(0, 1500),
+      variant: b.variant || null,
+      photos: (Array.isArray(b.photos) ? b.photos : []).filter((x) => typeof x === 'string' && x.startsWith('/uploads/')).slice(0, 6),
+      verified: isBuyer(b.customerId, b.key),
+      updatedAt: now(),
+      hidden: false,
+    });
+    if (!existing) db.reviews.unshift(r);
+    log(`New ${rating}★ review on ${b.key}${r.verified ? ' (verified buyer)' : ''}`, 'review');
+    save();
+    res.json(reviewView(r));
+  });
+
+  api.post('/reviews/:id/helpful', (req, res) => {
+    const r = find('reviews', req.params.id);
+    if (!r) return bad(res, 404, 'Not found');
+    r.helpful = Math.max(0, (r.helpful || 0) + (req.body?.undo ? -1 : 1));
+    save();
+    res.json({ helpful: r.helpful });
+  });
+
+  const qView = (q) => ({ ...q, customerId: undefined });
+  api.get('/questions', (req, res) => {
+    const key = String(req.query.key || '');
+    res.json(D().questions.filter((q) => q.key === key && !q.hidden).map(qView));
+  });
+
+  api.post('/questions', (req, res) => {
+    const b = req.body || {};
+    const text = String(b.text || '').trim();
+    if (!b.key || text.length < 5) return bad(res, 400, 'Please type your question');
+    const l = find('listings', b.key);
+    const q = {
+      id: uid('QN'),
+      key: b.key,
+      sellerId: l?.sellerId || null,
+      customerId: b.customerId || null,
+      author: String(b.author || 'Customer').slice(0, 40),
+      text: text.slice(0, 300),
+      answer: null,
+      answeredBy: null,
+      createdAt: now(),
+      answeredAt: null,
+    };
+    D().questions.unshift(q);
+    if (l) notify(l.sellerId, 'New question from a buyer ❓', `${titleOf(l)}: "${q.text}"`, 'question');
+    save();
+    res.json(qView(q));
+  });
+
+  function answer(q, text, by) {
+    q.answer = String(text || '').trim().slice(0, 600);
+    q.answeredBy = by;
+    q.answeredAt = now();
+    if (q.customerId) notifyCustomer(q.customerId, 'Your question was answered', `${by}: ${q.answer}`, 'question', q.key.startsWith('GXL') ? `/product/${q.key}` : '');
+  }
+
+  seller.get('/questions', (req, res) => res.json(D().questions.filter((q) => q.sellerId === req.seller.id)));
+
+  seller.post('/questions/:id/answer', (req, res) => {
+    const q = find('questions', req.params.id);
+    if (!q || q.sellerId !== req.seller.id) return bad(res, 404, 'Not found');
+    if (String(req.body?.answer || '').trim().length < 2) return bad(res, 400, 'Type an answer');
+    answer(q, req.body.answer, req.seller.storeName);
+    save();
+    res.json(q);
+  });
+
+  admin.post('/questions/:id/answer', (req, res) => {
+    const q = find('questions', req.params.id);
+    if (!q) return bad(res, 404, 'Not found');
+    if (String(req.body?.answer || '').trim().length < 2) return bad(res, 400, 'Type an answer');
+    answer(q, req.body.answer, 'GAMEX');
+    save();
+    res.json(q);
+  });
+
+  admin.patch('/reviews/:id', (req, res) => {
+    const r = find('reviews', req.params.id);
+    if (!r) return bad(res, 404, 'Not found');
+    r.hidden = !!req.body?.hidden;
+    save();
+    res.json(r);
+  });
+
+  admin.patch('/questions/:id', (req, res) => {
+    const q = find('questions', req.params.id);
+    if (!q) return bad(res, 404, 'Not found');
+    q.hidden = !!req.body?.hidden;
+    save();
+    res.json(q);
+  });
+
+  /** After "ship": book a real courier pickup when Shiprocket is connected. */
+  async function onShipped(o) {
+    if (!courierLive()) return;
+    const r = await createShiprocketShipment(o, find('sellers', o.sellerId));
+    if (!r) return;
+    Object.assign(o, { awb: r.awb, courier: r.courier, shiprocketId: r.shipmentId });
+    o.events.push({ l: `Shiprocket booked ${r.courier} • AWB ${r.awb}`, a: now() });
+    save();
+  }
+
+  return { migrate, trackOne, recordPurchase, onShipped };
 }

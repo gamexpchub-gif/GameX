@@ -335,6 +335,30 @@ export interface ServiceJob {
   events: Ev[];
 }
 
+export interface ReviewItem {
+  id: string;
+  key: string;
+  author: string;
+  rating: number;
+  title: string;
+  body: string;
+  photos: string[];
+  verified: boolean;
+  hidden?: boolean;
+  createdAt: string;
+}
+export interface QuestionItem {
+  id: string;
+  key: string;
+  sellerId: string | null;
+  author: string;
+  text: string;
+  answer: string | null;
+  answeredBy: string | null;
+  hidden?: boolean;
+  createdAt: string;
+}
+
 export interface DB {
   sellers: Seller[];
   listings: Listing[];
@@ -358,6 +382,8 @@ export interface DB {
   pushTokens: { customerId: string; token: string }[];
   repairs: ServiceJob[];
   sellRequests: ServiceJob[];
+  reviews: ReviewItem[];
+  questions: QuestionItem[];
 }
 
 const EMPTY: DB = {
@@ -382,6 +408,8 @@ const EMPTY: DB = {
   pushTokens: [],
   repairs: [],
   sellRequests: [],
+  reviews: [],
+  questions: [],
   settings: {
     storeName: 'GAMEX',
     supportPhone: '',

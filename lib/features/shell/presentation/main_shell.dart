@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/i18n/i18n.dart';
 import 'liquid_nav_bar.dart';
 
 class MainShell extends StatelessWidget {
@@ -40,30 +41,30 @@ class MainShell extends StatelessWidget {
               onTap: (i) =>
                   shell.goBranch(i, initialLocation: i == shell.currentIndex),
               items: [
-                const NavItem(
+                NavItem(
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home_rounded,
-                  label: 'Home',
+                  label: 'Home'.tr(context),
                 ),
-                const NavItem(
+                NavItem(
                   icon: Icons.grid_view_outlined,
                   activeIcon: Icons.grid_view_rounded,
-                  label: 'Category',
+                  label: 'Category'.tr(context),
                 ),
-                const NavItem(
+                NavItem(
                   icon: Icons.shopping_bag_outlined,
                   activeIcon: Icons.shopping_bag_rounded,
-                  label: 'Order',
+                  label: 'Order'.tr(context),
                 ),
-                const NavItem(
+                NavItem(
                   icon: Icons.star_border_rounded,
                   activeIcon: Icons.star_rounded,
-                  label: 'Review',
+                  label: 'Review'.tr(context),
                 ),
-                const NavItem(
+                NavItem(
                   icon: Icons.person_outline_rounded,
                   activeIcon: Icons.person_rounded,
-                  label: 'Account',
+                  label: 'Account'.tr(context),
                 ),
               ],
             ),

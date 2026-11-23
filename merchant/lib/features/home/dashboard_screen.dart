@@ -1491,11 +1491,11 @@ class _QuickGrid extends ConsumerWidget {
         0,
       ),
       (
-        Icons.local_shipping_rounded,
-        'Track\nshipments',
+        Icons.forum_rounded,
+        'Buyer\nQ&A',
         C.cyan,
-        () => context.go('/orders?tab=transit'),
-        0,
+        () => context.push('/questions'),
+        ref.watch(openQuestionsProvider),
       ),
       (
         Icons.assignment_return_rounded,

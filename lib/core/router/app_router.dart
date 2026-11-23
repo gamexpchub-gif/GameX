@@ -15,10 +15,6 @@ import '../../features/commerce/presentation/sale_screen.dart';
 import '../../features/commerce/presentation/trade_in_screen.dart';
 import '../../features/commerce/presentation/wallet_screen.dart';
 import '../../features/discover/data/phone_filter.dart';
-import '../../features/service/presentation/health_check_screen.dart';
-import '../../features/service/presentation/repair_screen.dart';
-import '../../features/service/presentation/setup_screen.dart';
-import '../../features/service/presentation/tracking_screen.dart';
 import '../../features/discover/presentation/compare_screen.dart';
 import '../../features/discover/presentation/explore_screen.dart';
 import '../../features/discover/presentation/finder_screen.dart';
@@ -30,6 +26,10 @@ import '../../features/product/presentation/product_detail_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/reviews/presentation/reviews_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
+import '../../features/service/presentation/health_check_screen.dart';
+import '../../features/service/presentation/repair_screen.dart';
+import '../../features/service/presentation/setup_screen.dart';
+import '../../features/service/presentation/tracking_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/trust/presentation/certificate_screen.dart';
@@ -102,6 +102,15 @@ final appRouter = GoRouter(
       path: '/product/:id',
       builder: (_, s) =>
           ProductDetailScreen(productId: s.pathParameters['id']!),
+    ),
+    // Shared links: https://<server>/gamex/p/<id> and gamex://app/product/<id>.
+    GoRoute(
+      path: '/gamex/p/:id',
+      redirect: (_, s) => '/product/${s.pathParameters['id']}',
+    ),
+    GoRoute(
+      path: '/p/:id',
+      redirect: (_, s) => '/product/${s.pathParameters['id']}',
     ),
     GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
     GoRoute(
