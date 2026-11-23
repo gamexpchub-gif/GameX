@@ -119,6 +119,7 @@ type Cfg = { otp: string; payments: string; push: boolean; courier: boolean; cod
 function LaunchCard() {
   const settings = useDB((d) => d.settings) as unknown as { codLimitNew?: number; codMaxOpen?: number };
   const [cfg, setCfg] = useState<Cfg | null>(null);
+  const deletions = useDB((d) => d.deletionRequests ?? []);
   const [limit, setLimit] = useState(settings.codLimitNew ?? 15000);
   const [maxOpen, setMaxOpen] = useState(settings.codMaxOpen ?? 2);
   useEffect(() => {
@@ -171,6 +172,29 @@ function LaunchCard() {
         >
           Save limits
         </Button>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-slate-100 p-4">
+          <p className="font-semibold text-ink">Play Store links</p>
+          <p className="mt-1 text-sm text-muted">Use these in Play Console → App content.</p>
+          {['privacy', 'terms', 'refund-policy', 'delete-account'].map((p) => (
+            <p key={p} className="mt-1 font-mono text-xs text-brand">
+              https://admin.deencircle.online/gamex/{p}
+            </p>
+          ))}
+        </div>
+        <div className="rounded-xl border border-slate-100 p-4">
+          <p className="font-semibold text-ink">Account deletion requests ({deletions.length})</p>
+          {deletions.length === 0 ? (
+            <p className="mt-1 text-sm text-muted">None yet.</p>
+          ) : (
+            deletions.slice(0, 8).map((d) => (
+              <p key={d.id} className="mt-1 text-sm text-ink">
+                +91 {d.phone} • {new Date(d.at).toLocaleDateString('en-IN')} {d.reason && <span className="text-muted">• {d.reason}</span>}
+              </p>
+            ))
+          )}
+        </div>
       </div>
     </Card>
   );

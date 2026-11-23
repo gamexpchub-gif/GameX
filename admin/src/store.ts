@@ -384,6 +384,7 @@ export interface DB {
   sellRequests: ServiceJob[];
   reviews: ReviewItem[];
   questions: QuestionItem[];
+  deletionRequests?: { id: string; phone: string; reason: string; at: string; status: string }[];
 }
 
 const EMPTY: DB = {

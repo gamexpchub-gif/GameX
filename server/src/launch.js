@@ -8,6 +8,7 @@
 //   Courier ........ SHIPROCKET_EMAIL + SHIPROCKET_PASSWORD (see service.js)
 //   App links ...... ANDROID_SHA256 (signing certificate fingerprint)
 import crypto from 'node:crypto';
+import express from 'express';
 
 const MIN = 6e4;
 const env = (k) => (process.env[k] || '').trim();
@@ -237,6 +238,66 @@ a{display:block;margin:10px 0;padding:14px;border-radius:14px;text-decoration:no
 <a class="a" href="${deep}">Open in the GAMEX app</a>
 <a class="b" href="https://play.google.com/store/apps/details?id=com.gamex.gamex_shop">Get the app</a></div>
 <script>setTimeout(function(){location.href=${JSON.stringify(deep)}},300)</script></body></html>`);
+  });
+
+  // ------------------------------------------------ Policy pages (Play Store) --
+  const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} | GAMEX</title><style>body{margin:0;font-family:system-ui,sans-serif;color:#0d1030;background:#f6f4ff}
+header{background:linear-gradient(135deg,#14104a,#3b23b8,#2f6bff);color:#fff;padding:28px 20px}h1{margin:6px 0 0;font-size:26px}
+main{max-width:760px;margin:0 auto;padding:20px;line-height:1.6}h2{font-size:18px;margin-top:28px}a{color:#3b23b8}
+.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px #5b4bd614}input,textarea,button{font:inherit;width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid #ddd;margin:6px 0}
+button{background:#3b5bff;color:#fff;border:0;font-weight:700}</style></head><body><header><div style="font-weight:900;letter-spacing:2px">GAME<span style="color:#8fb4ff">X</span></div><h1>${title}</h1></header><main>${body}
+<p style="margin-top:32px;color:#666;font-size:13px">Questions: support@gamex.in • Last updated ${new Date().toISOString().slice(0, 10)}</p></main></body></html>`;
+  const html = (res, t, b) => res.set('content-type', 'text/html; charset=utf-8').send(page(t, b));
+
+  site.get('/privacy', (_, res) =>
+    html(res, 'Privacy Policy', `<div class="card">
+<p>GAMEX ("we") runs a marketplace for certified second-hand phones in India. This policy explains what we collect and why.</p>
+<h2>What we collect</h2><ul>
+<li><b>Account:</b> name, mobile number, email (for login with OTP, order updates).</li>
+<li><b>Orders:</b> delivery address, items, payment status. Card/UPI details are handled by our payment partner (Razorpay) and never stored by GAMEX.</li>
+<li><b>Trade-in, repair and sell requests:</b> phone model, condition answers, IMEI when inspected, payout UPI/bank details.</li>
+<li><b>Reviews and questions</b> you post, including photos.</li>
+<li><b>Device:</b> push-notification token, app version; microphone only for voice search and the health check; camera only for QR scanning, health check and review photos.</li></ul>
+<h2>Why we use it</h2><p>To deliver orders, verify phones, prevent fraud (e.g. Cash on Delivery limits, IMEI blacklist checks), process refunds and warranty claims, send updates you asked for, and improve the app.</p>
+<h2>Who we share it with</h2><p>Only what is needed: the seller of your order, courier partners (name, phone, address), payment partner, SMS and notification providers. We never sell your data.</p>
+<h2>Your choices</h2><p>You can update your profile in the app, turn off notifications, and request deletion of your account at <a href="delete-account">Delete my account</a>. We keep invoices and order records as required by Indian tax law.</p>
+<h2>Security</h2><p>Data is sent over HTTPS and stored on servers in India with restricted access.</p></div>`),
+  );
+
+  site.get('/terms', (_, res) =>
+    html(res, 'Terms of Sale', `<div class="card">
+<p>Phones on GAMEX are pre-owned devices sold by verified sellers and inspected by GAMEX QC before listing.</p>
+<h2>Condition and inspection</h2><p>Each listing shows its grade, battery health, defects and a GAMEX QC certificate linked to the IMEI. Open-box delivery lets you check the phone before sharing the delivery OTP.</p>
+<h2>Prices and payment</h2><p>Prices include GST. Online payments are processed by Razorpay. Cash on Delivery may be limited for new accounts or high-value orders.</p>
+<h2>Offers, trade-in and wallet</h2><p>Accepted offers are held for 48 hours. Trade-in values are confirmed at pickup and may be revised if the condition differs. Wallet cashback is credited after the return window and can pay part of an order.</p>
+<h2>Warranty and returns</h2><p>See the <a href="refund-policy">Return & Refund Policy</a>. Seller warranty and GAMEX protection plans cover hardware faults, not physical or liquid damage unless the plan says so.</p></div>`),
+  );
+
+  site.get('/refund-policy', (_, res) =>
+    html(res, 'Return & Refund Policy', `<div class="card">
+<h2>7-day returns</h2><p>Request a return from the order page within the return window shown on the order (usually 7 days after delivery). We arrange a free pickup.</p>
+<h2>Inspection</h2><p>Returned phones are checked against the delivery condition and IMEI. Returns with new damage or a changed IMEI can be rejected.</p>
+<h2>Refunds</h2><p>Approved refunds go back to the original payment method within 5-7 working days; Cash on Delivery orders are refunded to your bank / UPI. Wallet money used is returned to the wallet.</p>
+<h2>Refused at the door</h2><p>If the phone does not match the listing during open-box delivery, refuse it and you are not charged.</p></div>`),
+  );
+
+  site.get('/delete-account', (_, res) =>
+    html(res, 'Delete my GAMEX account', `<div class="card">
+<p>Enter the mobile number of your GAMEX account. We will verify it and delete your account and personal data within 30 days. Invoices required by law are kept.</p>
+<form method="post" action="delete-account"><input name="phone" placeholder="Mobile number" required pattern="[0-9 +]{10,14}">
+<textarea name="reason" placeholder="Reason (optional)" rows="3"></textarea><button>Request deletion</button></form></div>`),
+  );
+
+  site.post('/delete-account', express.urlencoded({ extended: false }), (req, res) => {
+    const phone = digits(req.body?.phone);
+    if (phone.length !== 10) return html(res, 'Delete my GAMEX account', '<div class="card"><p>Please enter a valid 10-digit mobile number. <a href="delete-account">Try again</a>.</p></div>');
+    const db = D();
+    db.deletionRequests ??= [];
+    db.deletionRequests.unshift({ id: uid('DR'), phone, reason: String(req.body?.reason || '').slice(0, 300), at: now(), status: 'requested' });
+    log(`Account deletion requested (+91 ${phone.slice(0, 2)}xxxxxx${phone.slice(-2)})`, 'customer');
+    save();
+    html(res, 'Request received', '<div class="card"><p>We received your request. Our team will confirm by SMS and delete your account within 30 days.</p></div>');
   });
 
   /** Android App Links verification (served at /.well-known/assetlinks.json by nginx). */
