@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.gamex.gamex_shop"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_local_notifications and androidx.core 1.19 need API 37.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
