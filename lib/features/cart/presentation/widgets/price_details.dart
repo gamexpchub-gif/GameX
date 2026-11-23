@@ -14,7 +14,11 @@ class SummaryLines extends StatelessWidget {
     this.couponCode,
     this.extraLines = const [],
     this.deliveryFeeOverride,
+    this.extraSavings = 0,
   });
+
+  /// Savings on top of MRP + coupon (bank, wallet, festival…).
+  final double extraSavings;
 
   final CartSummary summary;
   final String? couponCode;
@@ -34,6 +38,7 @@ class SummaryLines extends StatelessWidget {
         delivery -
         summary.discount +
         extraLines.fold(0.0, (s, e) => s + e.$2);
+    final shownTotal = total < 0 ? 0.0 : total;
 
     Widget line(
       String label,
@@ -94,13 +99,18 @@ class SummaryLines extends StatelessWidget {
           delivery == 0 ? 'FREE' : formatPrice(delivery),
           color: delivery == 0 ? AppColors.success : null,
         ),
-        for (final e in extraLines) line(e.$1, formatPrice(e.$2)),
+        for (final e in extraLines)
+          line(
+            e.$1,
+            e.$2 < 0 ? '-${formatPrice(-e.$2)}' : formatPrice(e.$2),
+            color: e.$2 < 0 ? AppColors.success : null,
+          ),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 6),
           child: Divider(height: 1),
         ),
-        line('Total amount', formatPrice(total), bold: true),
-        if (summary.totalSavings > 0) ...[
+        line('Total amount', formatPrice(shownTotal), bold: true),
+        if (summary.totalSavings + extraSavings > 0) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -118,7 +128,7 @@ class SummaryLines extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'You save ${formatPrice(summary.totalSavings)} on this order',
+                    'You save ${formatPrice(summary.totalSavings + extraSavings)} on this order',
                     style: const TextStyle(
                       color: AppColors.success,
                       fontWeight: FontWeight.w700,

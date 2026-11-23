@@ -299,6 +299,9 @@ class SellerOrder {
     this.imeiVerified = false,
     this.cancelReason,
     this.returnRequest,
+    this.tradeIn,
+    this.offerId,
+    this.listPrice,
   });
 
   final String id;
@@ -325,6 +328,15 @@ class SellerOrder {
   /// Buyer's return request ({status, reason, details, pickupSlot}) or null.
   final Map<String, dynamic>? returnRequest;
   String? get returnStatus => returnRequest?['status'] as String?;
+
+  /// Buyer's old phone to collect at delivery (GAMEX exchange).
+  final Map<String, dynamic>? tradeIn;
+
+  /// Sold through an accepted Make-an-Offer deal.
+  final String? offerId;
+
+  /// Listing price when the order was placed (differs from [price] for offers).
+  final int? listPrice;
 
   /// New orders must be accepted within 4 hours; packing within 24.
   DateTime get slaDeadline => stage == OrderStage.newOrder
@@ -363,6 +375,9 @@ class SellerOrder {
     imeiVerified: imeiVerified ?? this.imeiVerified,
     cancelReason: cancelReason ?? this.cancelReason,
     returnRequest: returnRequest,
+    tradeIn: tradeIn,
+    offerId: offerId,
+    listPrice: listPrice,
   );
 
   Map<String, Object?> toJson() => {
@@ -387,6 +402,9 @@ class SellerOrder {
     'imeiVerified': imeiVerified,
     'cancelReason': cancelReason,
     'returnRequest': returnRequest,
+    'tradeIn': tradeIn,
+    'offerId': offerId,
+    'listPrice': listPrice,
   };
 
   factory SellerOrder.fromJson(Map<String, dynamic> j) => SellerOrder(
@@ -415,6 +433,9 @@ class SellerOrder {
     imeiVerified: j['imeiVerified'] as bool? ?? false,
     cancelReason: j['cancelReason'] as String?,
     returnRequest: (j['returnRequest'] as Map?)?.cast<String, dynamic>(),
+    tradeIn: (j['tradeIn'] as Map?)?.cast<String, dynamic>(),
+    offerId: j['offerId'] as String?,
+    listPrice: (j['listPrice'] as num?)?.toInt(),
   );
 }
 
@@ -721,4 +742,34 @@ class Insights {
         ),
     ],
   );
+}
+
+/// A buyer's Make-an-Offer on one of the seller's listings.
+class BuyerOffer {
+  const BuyerOffer(this.j);
+  final Map<String, dynamic> j;
+
+  static DateTime? _d(Object? v) => v == null ? null : DateTime.tryParse('$v');
+
+  String get id => j['id'] as String;
+  String get listingId => j['listingId'] as String;
+  String get customerName => j['customerName'] as String? ?? 'Customer';
+  int get listPrice => (j['listPrice'] as num).toInt();
+  int get amount => (j['amount'] as num).toInt();
+  int? get counter => (j['counter'] as num?)?.toInt();
+  int? get dealPrice => (j['dealPrice'] as num?)?.toInt();
+  String get note => j['note'] as String? ?? '';
+
+  /// pending | countered | accepted | rejected | expired | withdrawn | used
+  String get status => j['status'] as String;
+  DateTime get createdAt => _d(j['createdAt']) ?? DateTime.now();
+  DateTime? get expiresAt => _d(j['expiresAt']);
+  String get title => (j['listing'] as Map?)?['title'] as String? ?? 'Listing';
+  String? get photo => (j['listing'] as Map?)?['photo'] as String?;
+  int? get currentPrice => ((j['listing'] as Map?)?['price'] as num?)?.toInt();
+
+  int get percentOff => ((1 - amount / listPrice) * 100).round();
+  bool get pending => status == 'pending';
+
+  Map<String, dynamic> toJson() => j;
 }

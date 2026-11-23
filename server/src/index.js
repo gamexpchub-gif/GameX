@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
+import { mountGrowth } from './growth.js';
 import { CHECKLIST, buildSeed, imeiFrom, titleOf } from './seed.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,7 +52,10 @@ function migrate() {
     o.returnRequest ??= null;
   }
   for (const c of db.live) c.messages ??= [];
+  growth?.migrate();
 }
+/** Growth features (offers, wallet, trade-in, alerts). Set up below. */
+let growth;
 migrate();
 let saveTimer;
 function save() {
@@ -164,6 +168,7 @@ api.post('/customers/sync', (req, res) => {
     db.customers.unshift(c);
     log(`New customer ${name} signed up`, 'customer');
   } else Object.assign(c, { name, email: email || c.email, phone: phone || c.phone, lastSeen: now() });
+  c.referralCode ??= growth.codeFor(c.id);
   save();
   res.json(c);
 });
@@ -252,11 +257,18 @@ api.post('/orders', (req, res) => {
   if (!orderId || !customer || !address || !Array.isArray(items)) return bad(res, 400, 'Invalid order');
   const cust = find('customers', customer.id);
   if (cust && cust.status === 'blocked') return bad(res, 403, 'Your account is blocked. Contact support.');
+  const moneyErr = growth.checkOrder(req.body);
+  if (moneyErr) return bad(res, 409, moneyErr);
   const created = [];
   items.forEach((it, i) => {
     const l = find('listings', it.listingId);
     if (!l) return;
     if (l.stock < (it.qty || 1)) return;
+    const { price: unit, offer } = growth.offerPrice(l, it, customer.id);
+    if (offer) {
+      offer.status = 'used';
+      offer.events.push({ l: `Bought at ₹${unit.toLocaleString('en-IN')} • order ${orderId}`, a: now() });
+    }
     l.stock -= it.qty || 1;
     l.sold = (l.sold || 0) + (it.qty || 1);
     if (l.stock <= 0) l.status = 'soldOut';
@@ -269,7 +281,10 @@ api.post('/orders', (req, res) => {
       item: titleOf(l),
       variant: `${l.ram} / ${l.storage} • ${l.color}`,
       photo: l.photos[0],
-      price: l.price * (it.qty || 1),
+      price: unit * (it.qty || 1),
+      listPrice: l.price,
+      offerId: offer?.id || null,
+      protection: it.protection || null,
       buyer: address.fullName || customer.name,
       phone: address.phone || customer.phone || '',
       address: address.details ? `${address.details}, ${address.area || ''}` : '',
@@ -297,7 +312,8 @@ api.post('/orders', (req, res) => {
     notify(l.sellerId, `New order ${o.id}`, `${o.item} • ₹${o.price.toLocaleString('en-IN')} — accept within 4 hours.`, 'order');
     log(`New order ${o.id} • ${o.item} (${sellerOf(l)?.storeName})`, 'order');
   });
-  if (!created.length) return bad(res, 409, 'These phones are no longer available');
+  if (items.length && !created.length) return bad(res, 409, 'These phones are no longer available');
+  growth.onOrderPlaced(req.body, created);
   save();
   res.json({ ids: created });
 });
@@ -573,6 +589,7 @@ seller.get('/bootstrap', (req, res) => {
     orders: db.orders.filter((o) => o.sellerId === sid),
     live: db.live.filter((c) => c.sellerId === sid),
     claims: db.claims.filter((c) => c.sellerId === sid),
+    offers: db.offers.filter((o) => o.sellerId === sid),
     payouts: db.payouts.filter((p) => p.sellerId === sid),
     notifications: db.notifications.filter((n) => n.sellerId === sid || n.sellerId === null).map((n) => ({ ...n, read: n.read.includes(sid) })),
     insights: sellerInsights(sid),
@@ -617,6 +634,7 @@ seller.patch('/listings/:id', (req, res) => {
   const l = find('listings', req.params.id);
   if (!l || l.sellerId !== req.seller.id) return bad(res, 404, 'Not found');
   const { stock, price, status } = req.body || {};
+  const before = growth.snapshot(l);
   if (typeof price === 'number' && price > 0) l.price = Math.round(price);
   if (typeof stock === 'number' && stock >= 0) {
     l.stock = Math.round(stock);
@@ -625,6 +643,7 @@ seller.patch('/listings/:id', (req, res) => {
   }
   if (status === 'paused' && l.status === 'active') l.status = 'paused';
   if (status === 'active' && l.status === 'paused') l.status = 'active';
+  growth.listingChanged(l, before);
   save();
   res.json(l);
 });
@@ -650,6 +669,7 @@ function orderAction(o, action, body, who) {
       o.stage = 'cancelled';
       o.cancelReason = body.reason || 'Rejected';
       ev(`Rejected by ${who} • ${o.cancelReason}`);
+      growth.onCancelled(o);
       {
         const l = find('listings', o.listingId);
         if (l) {
@@ -678,9 +698,12 @@ function orderAction(o, action, body, who) {
       if (o.stage !== 'shipped') return 'Order is not shipped';
       // Open-box delivery: the buyer shares the OTP only after checking the phone.
       if (who === 'seller' && String(body.otp || '') !== String(o.otp)) return 'Wrong delivery OTP. Ask the buyer for the 4-digit OTP in their GAMEX app.';
+      if (who === 'seller' && o.tradeIn && body.tradeInCollected !== true) return `Collect the buyer's old ${o.tradeIn.model} (trade-in) before marking delivered.`;
       o.stage = 'delivered';
       o.deliveredAt = now();
       ev(who === 'seller' ? 'Delivered • open-box check done, OTP verified' : 'Delivered');
+      if (o.tradeIn) ev(`Trade-in ${o.tradeIn.model} collected`);
+      growth.onDelivered(o);
       break;
     case 'return':
       if (o.stage !== 'delivered') return 'Only delivered orders can be returned';
@@ -692,6 +715,7 @@ function orderAction(o, action, body, who) {
       o.stage = 'cancelled';
       o.cancelReason = body.reason || 'Cancelled by GAMEX';
       ev(`Cancelled by ${who} • ${o.cancelReason}`);
+      growth.onCancelled(o);
       break;
     default:
       return 'Unknown action';
@@ -807,6 +831,7 @@ admin.post('/listings/:id/qc', (req, res) => {
   if (!l) return bad(res, 404, 'Not found');
   const { decision, reason = '', inspector = 'Super Admin', checks = {}, defects } = req.body || {};
   const title = titleOf(l);
+  const before = growth.snapshot(l);
   if (Array.isArray(defects)) l.defects = defects.slice(0, 20);
   if (decision === 'approve' && blacklisted(l.imei)) return bad(res, 409, 'This IMEI is blacklisted - reject the listing instead.');
   if (decision === 'approve') {
@@ -822,6 +847,7 @@ admin.post('/listings/:id/qc', (req, res) => {
   } else return bad(res, 400, 'Unknown decision');
   l.qc = { by: inspector, at: now(), decision: decision === 'approve' ? 'approved' : decision === 'changes' ? 'changes' : 'rejected', notes: reason, checks };
   log(`QC ${l.qc.decision}: ${title} (${sellerOf(l)?.storeName})`, 'qc');
+  growth.listingChanged(l, before);
   save();
   res.json(l);
 });
@@ -830,6 +856,7 @@ admin.patch('/listings/:id', (req, res) => {
   const l = find('listings', req.params.id);
   if (!l) return bad(res, 404, 'Not found');
   const { featured, status, price, defects } = req.body || {};
+  const before = growth.snapshot(l);
   if (Array.isArray(defects)) l.defects = defects.slice(0, 20);
   if (featured !== undefined) l.featured = !!featured;
   if (status) {
@@ -837,6 +864,7 @@ admin.patch('/listings/:id', (req, res) => {
     if (status === 'paused') notify(l.sellerId, 'Listing delisted by GAMEX', `${l.brand} ${l.model} was taken down. Contact seller support.`, 'qc');
   }
   if (typeof price === 'number') l.price = price;
+  growth.listingChanged(l, before);
   save();
   res.json(l);
 });
@@ -1010,6 +1038,7 @@ admin.post('/reset', (_, res) => {
   res.json({ ok: true });
 });
 
+growth = mountGrowth({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive });
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 
 // ---------------- Admin panel (built) ----------------

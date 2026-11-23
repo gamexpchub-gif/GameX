@@ -168,6 +168,54 @@ class OrderDetailScreen extends ConsumerWidget {
               ),
             ),
           ],
+          if (o.tradeIn != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: C.green.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: C.green.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.currency_exchange_rounded, color: C.green),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      o.stage == OrderStage.delivered
+                          ? 'Exchange: old ${o.tradeIn!['model']} collected. GAMEX pays the buyer\'s credit; your payout is unchanged.'
+                          : 'Exchange order: collect the buyer\'s old ${o.tradeIn!['model']} at delivery. GAMEX pays the ${inr((o.tradeIn!['amount'] as num).round())} credit; your payout is unchanged.',
+                      style: const TextStyle(fontSize: 12.5, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (o.offerId != null &&
+              o.listPrice != null &&
+              o.listPrice! > o.price)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: C.amber.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.handshake_rounded, color: C.amber),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Sold via Make an Offer at ${inr(o.price)} (listed ${inr(o.listPrice!)})',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (o.returnRequest != null) ...[
             const SectionTitle('Return request'),
             Panel(
@@ -359,55 +407,87 @@ class OrderDetailScreen extends ConsumerWidget {
     SellerOrder o,
   ) async {
     final c = TextEditingController();
+    final trade = o.tradeIn;
+    var collected = false;
     final otp = await showDialog<String>(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('Open-box delivery'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Let the buyer open the box and check the phone (IMEI, screen, cameras). Then ask for the 4-digit OTP shown in their GAMEX app.',
-              style: TextStyle(color: C.muted, height: 1.4),
+      builder: (d) => StatefulBuilder(
+        builder: (d, set) => AlertDialog(
+          title: const Text('Open-box delivery'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Let the buyer open the box and check the phone (IMEI, screen, cameras). Then ask for the 4-digit OTP shown in their GAMEX app.',
+                style: TextStyle(color: C.muted, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: c,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                textAlign: TextAlign.center,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(
+                  fontSize: 26,
+                  letterSpacing: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+                decoration: const InputDecoration(
+                  counterText: '',
+                  hintText: '••••',
+                ),
+              ),
+              if (trade != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: C.green.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: CheckboxListTile(
+                    value: collected,
+                    onChanged: (v) => set(() => collected = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    title: Text(
+                      'Collected old ${trade['model']} (${trade['storage'] ?? ''})',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    subtitle: const Text(
+                      'Phone turns on, matches the buyer\'s answers, iCloud / Google signed out',
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: c,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(
-                fontSize: 26,
-                letterSpacing: 12,
-                fontWeight: FontWeight.w800,
-              ),
-              decoration: const InputDecoration(
-                counterText: '',
-                hintText: '••••',
-              ),
+            FilledButton(
+              onPressed: trade != null && !collected
+                  ? null
+                  : () => Navigator.pop(d, c.text),
+              child: const Text('Verify & deliver'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, c.text),
-            child: const Text('Verify & deliver'),
-          ),
-        ],
       ),
     );
     if (otp == null || otp.length != 4 || !context.mounted) return;
     await runAction(
       context,
-      () => ref.read(syncProvider.notifier).deliver(o.id, otp),
-      done: 'Delivered • OTP verified',
+      () => ref
+          .read(syncProvider.notifier)
+          .deliver(o.id, otp, tradeInCollected: collected),
+      done: trade == null
+          ? 'Delivered • OTP verified'
+          : 'Delivered • old ${trade['model']} collected',
     );
   }
 

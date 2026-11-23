@@ -9,6 +9,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/cart_item.dart';
 import '../../../data/models/order.dart';
+import '../../commerce/data/tradein.dart';
 
 class OrdersNotifier extends Notifier<List<Order>> {
   static const _seededKey = 'demo_orders_seeded_v1';
@@ -88,33 +89,59 @@ class OrdersNotifier extends Notifier<List<Order>> {
     required double subtotal,
     required double deliveryFee,
     required double discount,
+    List<(String, double)> lines = const [],
+    String? paymentNote,
+    TradeInQuote? tradeIn,
+    double walletUse = 0,
+    double total = 0,
   }) async {
     final id = newOrderId(DateTime.now());
     final sellerItems = items.where((i) => i.product.id.startsWith('GXL'));
-    if (sellerItems.isNotEmpty) {
-      // Marketplace items are confirmed by the server (stock check) first.
-      final user = ref.read(authProvider);
-      await ref.read(apiProvider).post('/orders', {
-        'orderId': id,
-        'customer': {
-          'id': user?.id ?? 'guest',
-          'name': user?.name ?? address.fullName,
-          'phone': user?.phone ?? address.phone,
-        },
-        'address': address.toJson(),
-        'payment': switch (payment) {
-          PaymentMethod.cashOnDelivery => 'COD',
-          PaymentMethod.bkash => 'UPI',
-          PaymentMethod.nagad => 'Wallet',
-          PaymentMethod.card => 'Card',
-        },
-        'items': [
-          for (final i in sellerItems)
-            {'listingId': i.product.id, 'qty': i.quantity},
-        ],
-      });
+    final user = ref.read(authProvider);
+    // Marketplace items, wallet money and trade-ins are confirmed by the
+    // server first; catalogue-only orders still report there (best effort)
+    // so cashback and exchange pickups are recorded.
+    final mustConfirm = sellerItems.isNotEmpty || walletUse > 0;
+    Future<void> send() => ref.read(apiProvider).post('/orders', {
+      'orderId': id,
+      'customer': {
+        'id': user?.id ?? 'guest',
+        'name': user?.name ?? address.fullName,
+        'phone': user?.phone ?? address.phone,
+      },
+      'address': address.toJson(),
+      'payment': switch (payment) {
+        PaymentMethod.cashOnDelivery => 'COD',
+        PaymentMethod.bkash => 'UPI',
+        PaymentMethod.nagad => 'Wallet',
+        PaymentMethod.card => 'Card',
+        PaymentMethod.emi => 'EMI',
+        PaymentMethod.payLater => 'PayLater',
+      },
+      'items': [
+        for (final i in sellerItems)
+          {
+            'listingId': i.product.id,
+            'qty': i.quantity,
+            if (i.offerId != null && !i.offerId!.startsWith('LOF'))
+              'offerId': i.offerId,
+            if (i.protection != null) 'protection': i.protection,
+          },
+      ],
+      'amounts': {'total': total.round(), 'walletUse': walletUse.round()},
+      if (tradeIn?.serverId != null) 'tradeInId': tradeIn!.serverId,
+    });
+    if (mustConfirm) {
+      await send();
     } else {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (user != null) {
+        try {
+          await send();
+        } catch (_) {
+          // Offline: the order still goes through for catalogue phones.
+        }
+      }
     }
     final order = Order(
       id: id,
@@ -128,6 +155,17 @@ class OrdersNotifier extends Notifier<List<Order>> {
       status: payment == PaymentMethod.cashOnDelivery
           ? OrderStatus.pending
           : OrderStatus.confirmed,
+      lines: lines,
+      paymentNote: paymentNote,
+      tradeIn: tradeIn == null
+          ? null
+          : {
+              'model': tradeIn.device.model,
+              'storage': tradeIn.device.storage,
+              'condition': tradeIn.device.conditionSummary,
+              'amount': tradeIn.amount,
+              'id': tradeIn.serverId,
+            },
     );
     state = [order, ...state];
     await ref

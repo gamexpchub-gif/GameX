@@ -227,6 +227,88 @@ export interface Settings {
   fixedFee: number;
 }
 
+export type Ev = { l: string; a: string };
+
+export interface BankOffer {
+  id: string;
+  bank: string;
+  kind: 'card' | 'emi' | 'any';
+  text: string;
+  percent: number;
+  flat: number;
+  maxOff: number;
+  minOrder: number;
+  active: boolean;
+}
+
+export interface Promo {
+  sale: { active: boolean; title: string; subtitle: string; startsAt: string; endsAt: string; extraOffPercent: number; maxExtraOff: number };
+  bankOffers: BankOffer[];
+  referral: { referrerBonus: number; friendBonus: number };
+  cashbackRate: number;
+  cashbackCap: number;
+  walletMaxPercent: number;
+  exchangeBonus: number;
+}
+
+export type TradeInStatus = 'quoted' | 'awaitingPickup' | 'pickedUp' | 'verified' | 'adjusted' | 'rejected' | 'cancelled';
+export interface TradeIn {
+  id: string;
+  customerId: string;
+  brand: string;
+  model: string;
+  storage: string;
+  answers: Record<string, string>;
+  faults: string[];
+  extras: string[];
+  amount: number;
+  finalAmount?: number;
+  lines: { label: string; amount: number }[];
+  status: TradeInStatus;
+  orderId: string | null;
+  note?: string;
+  createdAt: string;
+  expiresAt: string;
+  events: Ev[];
+}
+
+export type OfferStatus = 'pending' | 'countered' | 'accepted' | 'rejected' | 'expired' | 'withdrawn' | 'used';
+export interface Offer {
+  id: string;
+  listingId: string;
+  sellerId: string;
+  customerId: string;
+  customerName: string;
+  listPrice: number;
+  amount: number;
+  counter: number | null;
+  dealPrice: number | null;
+  note: string;
+  status: OfferStatus;
+  createdAt: string;
+  events: Ev[];
+}
+
+export interface WalletTx {
+  id: string;
+  customerId: string;
+  amount: number;
+  kind: string;
+  status: 'pending' | 'available' | 'void';
+  label: string;
+  at: string;
+}
+
+export interface StockAlert {
+  id: string;
+  customerId: string;
+  listingId: string;
+  type: 'price' | 'stock';
+  title: string;
+  status: 'active' | 'fired' | 'removed';
+  createdAt: string;
+}
+
 export interface DB {
   sellers: Seller[];
   listings: Listing[];
@@ -242,6 +324,12 @@ export interface DB {
   checklist: string[];
   blacklist: BlacklistEntry[];
   claims: Claim[];
+  promo: Promo | null;
+  tradeIns: TradeIn[];
+  offers: Offer[];
+  walletTx: WalletTx[];
+  alerts: StockAlert[];
+  pushTokens: { customerId: string; token: string }[];
 }
 
 const EMPTY: DB = {
@@ -258,6 +346,12 @@ const EMPTY: DB = {
   checklist: [],
   blacklist: [],
   claims: [],
+  promo: null,
+  tradeIns: [],
+  offers: [],
+  walletTx: [],
+  alerts: [],
+  pushTokens: [],
   settings: {
     storeName: 'GAMEX',
     supportPhone: '',

@@ -9,6 +9,8 @@ import '../../../core/widgets/skeleton.dart';
 import '../../../data/models/product.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../commerce/presentation/widgets/commerce_widgets.dart';
+import '../../commerce/services/notification_service.dart';
 import '../../discover/presentation/widgets/home_discover.dart';
 import '../../wishlist/providers/wishlist_provider.dart';
 import 'widgets/design_scale.dart';
@@ -79,8 +81,8 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   SliverToBoxAdapter(
                     child: HomeHeader(
-                      notifications: 3,
-                      onBell: () => showNotificationsSheet(context),
+                      notifications: ref.watch(unreadNotificationsProvider),
+                      onBell: () => context.push('/notifications'),
                     ),
                   ),
                   SliverToBoxAdapter(child: SizedBox(height: 16 * k)),
@@ -117,11 +119,16 @@ class HomeScreen extends ConsumerWidget {
                     child: OfferCard(
                       tradeInUpTo: 15000,
                       emiFrom: 999,
-                      onExchange: () => showTradeInSheet(context),
-                      onEmi: () => showEmiSheet(context),
+                      onExchange: () => context.push('/trade-in'),
+                      onEmi: () => context.push('/emi'),
                     ),
                   ),
                   SliverToBoxAdapter(child: SizedBox(height: 28 * k)),
+                  SliverToBoxAdapter(
+                    child: FestivalSaleBanner(
+                      padding: EdgeInsets.fromLTRB(35 * k, 0, 35 * k, 22 * k),
+                    ),
+                  ),
                   const SliverToBoxAdapter(child: DiscoverToolsCard()),
                   SliverToBoxAdapter(child: SizedBox(height: 30 * k)),
                   const SliverToBoxAdapter(child: ForYouRail()),

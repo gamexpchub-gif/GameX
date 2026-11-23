@@ -18,6 +18,7 @@ import '../../catalog/providers/catalog_providers.dart';
 import '../../discover/presentation/widgets/fair_price_meter.dart';
 import '../../discover/presentation/widgets/pdp_discover_actions.dart';
 import '../../discover/providers/discover_providers.dart';
+import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../home/presentation/widgets/design_scale.dart' show HomeColors;
 import '../../home/presentation/widgets/home_sheets.dart';
 import '../../reviews/providers/reviews_provider.dart';
@@ -234,6 +235,8 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                         FairPriceMeter(product: p, price: _price),
                         const SizedBox(height: 10),
                         PdpDiscoverActions(product: p),
+                        const SizedBox(height: 10),
+                        PdpCommerceSection(product: p, price: _price),
                       ],
                     ),
                   ),

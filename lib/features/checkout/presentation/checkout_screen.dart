@@ -15,6 +15,13 @@ import '../../../core/widgets/section_card.dart';
 import '../../../data/models/order.dart';
 import '../../cart/presentation/widgets/price_details.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../commerce/data/accessories.dart';
+import '../../commerce/data/commerce_api.dart';
+import '../../commerce/data/emi.dart';
+import '../../commerce/data/protection.dart';
+import '../../commerce/presentation/emi_screen.dart';
+import '../../commerce/presentation/widgets/commerce_widgets.dart';
+import '../../commerce/providers/checkout_extras.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../providers/address_provider.dart';
 import 'widgets/address_sheets.dart';
@@ -39,7 +46,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _cardName = TextEditingController();
   final _note = TextEditingController();
 
-  PaymentMethod _payment = PaymentMethod.cashOnDelivery;
+  PaymentMethod get _payment => ref.read(paymentChoiceProvider).method;
+  PaymentChoice get _pay => ref.read(paymentChoiceProvider);
+  void _setPay(PaymentChoice Function(PaymentChoice) f) =>
+      ref.read(paymentChoiceProvider.notifier).update(f);
   _Delivery _delivery = _Delivery.standard;
   bool _agreed = true;
   bool _itemsExpanded = false;
@@ -67,8 +77,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ? s.deliveryFee + _expressFee
       : s.deliveryFee;
 
-  double _total(CartSummary s, Address? a) =>
-      s.subtotal - s.discount + _deliveryFee(s, a);
+  CheckoutTotals _totals(CartSummary s, Address? a) =>
+      ref.read(checkoutTotalsProvider(_deliveryFee(s, a)));
+
+  double _total(CartSummary s, Address? a) => _totals(s, a).total;
+
+  /// "No-cost EMI • HDFC Bank • 6 × ₹8,333" etc.
+  String? _paymentNote(double total) {
+    final pay = _pay;
+    switch (pay.method) {
+      case PaymentMethod.emi:
+        final b = pay.bank ?? kEmiBanks.first;
+        final plan = emiPlan(b, pay.months, total);
+        return '${plan.noCost ? 'No-cost EMI' : 'EMI'} • ${b.name} • ${plan.months} × ${formatPrice(plan.monthly.ceilToDouble())}';
+      case PaymentMethod.payLater:
+        final o = pay.payLater;
+        return '${o.title} • ${o.parts} × ${formatPrice(((total + o.fee) / o.parts).ceilToDouble())}';
+      case PaymentMethod.card:
+        return pay.bank == null ? null : 'Card • ${pay.bank!.name}';
+      default:
+        return null;
+    }
+  }
 
   Future<void> _placeOrder() async {
     final address = ref.read(addressBookProvider).current;
@@ -80,7 +110,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       showAddressForm(context);
       return;
     }
+    final totals = _totals(summary, address);
+    if (_payment == PaymentMethod.emi && totals.total < kEmiMinOrder) {
+      showAppSnack(
+        context,
+        'EMI is available on orders above ${formatPrice(kEmiMinOrder)}',
+      );
+      return;
+    }
+    if (_payment == PaymentMethod.payLater &&
+        !_pay.payLater.allows(totals.total)) {
+      showAppSnack(
+        context,
+        '${_pay.payLater.title} works up to ${formatPrice(_pay.payLater.limit)}',
+      );
+      return;
+    }
     if (_payment != PaymentMethod.cashOnDelivery &&
+        _payment != PaymentMethod.payLater &&
         !(_payForm.currentState?.validate() ?? false)) {
       showAppSnack(context, 'Please complete your payment details');
       return;
@@ -112,6 +159,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             subtotal: summary.subtotal,
             deliveryFee: _deliveryFee(summary, address),
             discount: summary.discount,
+            lines: totals.orderLines,
+            paymentNote: _paymentNote(totals.total),
+            tradeIn: totals.tradeIn > 0 ? ref.read(tradeInProvider) : null,
+            walletUse: totals.wallet,
+            total: totals.total,
           );
     } catch (e) {
       if (!mounted) return;
@@ -121,6 +173,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
     ref.read(cartProvider.notifier).removeKeys({for (final i in items) i.key});
+    final api = ref.read(commerceApiProvider);
+    for (final i in items) {
+      if (i.offerId != null && i.offerId!.startsWith('LOF')) {
+        api.markOfferUsed(i.offerId!);
+      }
+    }
+    if (totals.tradeIn > 0) ref.read(tradeInProvider.notifier).set(null);
+    ref.read(useWalletProvider.notifier).set(false);
+    ref.invalidate(walletProvider);
+    ref.invalidate(myOffersProvider);
     ref.read(deselectedProvider.notifier).clear();
     ref.read(promoProvider.notifier).clear();
     HapticFeedback.heavyImpact();
@@ -138,6 +200,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!_expressAvailable(address) && _delivery == _Delivery.express) {
       _delivery = _Delivery.standard;
     }
+    ref.watch(paymentChoiceProvider);
+    final totals = ref.watch(
+      checkoutTotalsProvider(_deliveryFee(summary, address)),
+    );
+    final hasPhone = items.any((i) => !isAccessory(i.product));
 
     return Scaffold(
       // Light fill behind the rounded sticky bar's corners.
@@ -183,8 +250,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   _deliveryCard(summary, address),
                   const SizedBox(height: 12),
                   _itemsCard(items.length, summary),
+                  if (hasPhone) ...[
+                    const SizedBox(height: 12),
+                    _protectionCard(),
+                    const SizedBox(height: 12),
+                    const CrossSellCard(),
+                    const SizedBox(height: 12),
+                    _tradeInCard(totals),
+                  ],
                   const SizedBox(height: 12),
                   _paymentCard(summary, address),
+                  const SizedBox(height: 12),
+                  _walletCard(totals),
                   const SizedBox(height: 12),
                   _couponAndNote(summary),
                   const SizedBox(height: 12),
@@ -201,10 +278,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           summary: summary,
                           couponCode: ref.watch(promoProvider),
                           deliveryFeeOverride: summary.deliveryFee,
+                          extraSavings:
+                              totals.festival + totals.bank + totals.wallet,
                           extraLines: [
                             if (_delivery == _Delivery.express &&
                                 _expressAvailable(address))
                               ('Express delivery', _expressFee),
+                            ...totals.orderLines,
                           ],
                         ),
                       ],
@@ -258,19 +338,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          formatPrice(_total(summary, address)),
+                          formatPrice(totals.total),
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         Text(
-                          summary.totalSavings > 0
-                              ? 'You save ${formatPrice(summary.totalSavings)}'
-                              : 'Incl. VAT & delivery',
+                          totals.savings > 0
+                              ? 'You save ${formatPrice(totals.savings)}'
+                              : 'Incl. GST & delivery',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: summary.totalSavings > 0
+                            color: totals.savings > 0
                                 ? AppColors.success
                                 : theme.colorScheme.outline,
                           ),
@@ -284,11 +364,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: FilledButton(
                       onPressed: _placing ? null : _placeOrder,
                       child: FittedBox(
-                        child: Text(
-                          _payment == PaymentMethod.cashOnDelivery
-                              ? 'Place Order'
-                              : 'Pay ${formatPrice(_total(summary, address))}',
-                        ),
+                        child: Text(switch (_payment) {
+                          PaymentMethod.cashOnDelivery => 'Place Order',
+                          PaymentMethod.emi => 'Pay with EMI',
+                          PaymentMethod.payLater => 'Buy now, pay later',
+                          _ => 'Pay ${formatPrice(totals.total)}',
+                        }),
                       ),
                     ),
                   ),
@@ -512,7 +593,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       PaymentMethod.cashOnDelivery: 'Pay in cash when the phone arrives',
       PaymentMethod.bkash: 'Google Pay, PhonePe, Paytm & any UPI app',
       PaymentMethod.nagad: 'Paytm, Amazon Pay, Mobikwik wallets',
-      PaymentMethod.card: 'Visa, Mastercard, Amex • EMI available',
+      PaymentMethod.card: 'Visa, Mastercard, Amex, RuPay • bank offers',
+      PaymentMethod.emi: 'No-cost EMI on credit cards',
+      PaymentMethod.payLater: 'Pay in 15 days, in 3 parts or cardless EMI',
     };
     return SectionCard(
       child: Form(
@@ -528,7 +611,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             for (final m in PaymentMethod.values) ...[
               _ChoiceTile(
                 selected: _payment == m,
-                onTap: () => setState(() => _payment = m),
+                onTap: () => _setPay(
+                  (p) => p.copyWith(
+                    method: m,
+                    bankId: m == PaymentMethod.emi && p.bankId == null
+                        ? () => kEmiBanks.first.id
+                        : null,
+                  ),
+                ),
                 leading: PaymentMark(m, size: 40),
                 title: m.label,
                 subtitle: subtitles[m]!,
@@ -595,76 +685,291 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
           validator: Validators.phone,
         );
+      case PaymentMethod.emi:
+        final total = _total(s, a);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            EmiPlanPicker(
+              price: total,
+              bankId: _pay.bankId ?? kEmiBanks.first.id,
+              months: _pay.months,
+              onChanged: (b, m) =>
+                  _setPay((p) => p.copyWith(bankId: () => b, months: m)),
+            ),
+            const SizedBox(height: 12),
+            _cardFields(),
+          ],
+        );
+      case PaymentMethod.payLater:
+        final total = _total(s, a);
+        return RadioGroup<String>(
+          groupValue: _pay.payLaterId,
+          onChanged: (v) => _setPay((p) => p.copyWith(payLaterId: v)),
+          child: Column(
+            children: [
+              for (final o in kPayLater)
+                RadioListTile<String>(
+                  value: o.id,
+                  enabled: o.allows(total),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                    o.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    o.allows(total)
+                        ? (o.parts == 1
+                              ? 'Pay ${formatPrice(total)} by ${DateFormat('d MMM').format(DateTime.now().add(Duration(days: o.days)))}'
+                              : '${o.parts} × ${formatPrice(((total + o.fee) / o.parts).ceilToDouble())}${o.fee > 0 ? ' (incl. ${formatPrice(o.fee)} fee)' : ''}')
+                        : 'Up to ${formatPrice(o.limit)}',
+                  ),
+                ),
+              const Text(
+                'Quick KYC with PAN on the next screen. No credit card needed.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        );
       case PaymentMethod.card:
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextFormField(
-              controller: _cardNumber,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                _CardNumberFormatter(),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Card number',
-                hintText: '1234 5678 9012 3456',
-                prefixIcon: Icon(Icons.credit_card_rounded),
-                isDense: true,
-              ),
-              validator: Validators.cardNumber,
+            const Text(
+              'Card issued by (for bank offers)',
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 10),
-            Row(
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _cardExpiry,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      _ExpiryFormatter(),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'Expiry',
-                      hintText: 'MM/YY',
-                      isDense: true,
+                for (final b in kEmiBanks)
+                  ChoiceChip(
+                    label: Text(b.name, style: const TextStyle(fontSize: 12)),
+                    selected: _pay.bankId == b.id,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (v) => _setPay(
+                      (p) => p.copyWith(bankId: () => v ? b.id : null),
                     ),
-                    validator: Validators.cardExpiry,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextFormField(
-                    controller: _cardCvv,
-                    keyboardType: TextInputType.number,
-                    obscureText: true,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(4),
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'CVV',
-                      hintText: '•••',
-                      isDense: true,
-                    ),
-                    validator: Validators.cvv,
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 10),
-            TextFormField(
-              controller: _cardName,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Name on card',
-                isDense: true,
-              ),
-              validator: (v) => Validators.required(v, 'Name'),
-            ),
+            _cardFields(),
           ],
         );
     }
+  }
+
+  Widget _cardFields() => Column(
+    children: [
+      TextFormField(
+        controller: _cardNumber,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          _CardNumberFormatter(),
+        ],
+        decoration: const InputDecoration(
+          labelText: 'Card number',
+          hintText: '1234 5678 9012 3456',
+          prefixIcon: Icon(Icons.credit_card_rounded),
+          isDense: true,
+        ),
+        validator: Validators.cardNumber,
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _cardExpiry,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                _ExpiryFormatter(),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Expiry',
+                hintText: 'MM/YY',
+                isDense: true,
+              ),
+              validator: Validators.cardExpiry,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextFormField(
+              controller: _cardCvv,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'CVV',
+                hintText: '•••',
+                isDense: true,
+              ),
+              validator: Validators.cvv,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      TextFormField(
+        controller: _cardName,
+        textCapitalization: TextCapitalization.characters,
+        decoration: const InputDecoration(
+          labelText: 'Name on card',
+          isDense: true,
+        ),
+        validator: (v) => Validators.required(v, 'Name'),
+      ),
+    ],
+  );
+
+  // ── Protection ──
+  Widget _protectionCard() {
+    final items = ref
+        .watch(selectedCartProvider)
+        .where((i) => canProtect(i.product.categoryId))
+        .toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SectionHeading(
+            icon: Icons.shield_rounded,
+            title: 'Protect your phone',
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Screen damage, liquid damage and extended warranty. Claim from the app.',
+            style: TextStyle(fontSize: 12.5),
+          ),
+          const SizedBox(height: 10),
+          for (final i in items) ...[
+            if (items.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6, top: 4),
+                child: Text(
+                  i.product.name,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ProtectionPicker(
+              phonePrice: i.product.price,
+              selected: i.protection,
+              onChanged: (id) =>
+                  ref.read(cartProvider.notifier).setProtection(i.key, id),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Trade-in ──
+  Widget _tradeInCard(CheckoutTotals t) {
+    final q = ref.watch(tradeInProvider);
+    return SectionCard(
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0F9F6E), Color(0xFF22C55E)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.currency_exchange_rounded,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  q == null
+                      ? 'Exchange your old phone'
+                      : 'Exchange: −${formatPrice(t.tradeIn)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: q == null ? null : AppColors.success,
+                  ),
+                ),
+                Text(
+                  q == null
+                      ? 'Instant quote, taken off this bill. Picked up at delivery.'
+                      : '${q.device.model} • ${q.device.conditionSummary} • hand it over at delivery',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          if (q == null)
+            TextButton(
+              onPressed: () =>
+                  context.push('/trade-in?price=${t.summary.subtotal.round()}'),
+              child: const Text('Get quote'),
+            )
+          else
+            IconButton(
+              tooltip: 'Remove trade-in',
+              onPressed: () => ref.read(tradeInProvider.notifier).set(null),
+              icon: const Icon(Icons.close_rounded),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Wallet ──
+  Widget _walletCard(CheckoutTotals t) {
+    final user = ref.watch(walletProvider).asData?.value;
+    final on = ref.watch(useWalletProvider);
+    if (user == null || t.walletAvailable <= 0) {
+      return BankOffersCard(amount: t.beforeCredits, max: 3);
+    }
+    return Column(
+      children: [
+        SectionCard(
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: on,
+            onChanged: (v) => ref.read(useWalletProvider.notifier).set(v),
+            secondary: const Icon(
+              Icons.account_balance_wallet_rounded,
+              color: AppColors.primary,
+            ),
+            title: Text(
+              'Use GAMEX wallet (${formatPrice(t.walletAvailable)})',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              on
+                  ? '−${formatPrice(t.wallet)} applied'
+                  : 'Pay up to ${formatPrice(t.walletCap)} on this order',
+              style: TextStyle(color: on ? AppColors.success : null),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        BankOffersCard(amount: t.beforeCredits, max: 3),
+      ],
+    );
   }
 
   // ── Coupon + note ──

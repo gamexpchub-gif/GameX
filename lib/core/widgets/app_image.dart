@@ -52,6 +52,16 @@ class AppImage extends StatelessWidget {
           ? boxed
           : ClipRRect(borderRadius: borderRadius!, child: boxed);
     }
+    if (url.startsWith('acc:')) {
+      final tile = SizedBox(
+        width: width,
+        height: height,
+        child: AccessoryArt(url),
+      );
+      return borderRadius == null
+          ? tile
+          : ClipRRect(borderRadius: borderRadius!, child: tile);
+    }
     final spec = PhoneArtSpec.tryParse(url);
     if (spec != null) {
       final art = SizedBox(
@@ -83,5 +93,73 @@ class AppImage extends StatelessWidget {
     );
     if (borderRadius == null) return image;
     return ClipRRect(borderRadius: borderRadius!, child: image);
+  }
+}
+
+/// Drawn tile for accessories: `acc:<kind>/<ARGB hex>`.
+class AccessoryArt extends StatelessWidget {
+  const AccessoryArt(this.spec, {super.key});
+  final String spec;
+
+  static const _icons = <String, IconData>{
+    'case': Icons.smartphone_rounded,
+    'glass': Icons.layers_rounded,
+    'lens': Icons.camera_rounded,
+    'charger': Icons.power_rounded,
+    'cable': Icons.cable_rounded,
+    'buds': Icons.headphones_rounded,
+    'battery': Icons.battery_charging_full_rounded,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = spec.substring(4).split('/');
+    final kind = parts.first;
+    final color = Color(
+      int.tryParse(parts.length > 1 ? parts[1] : '', radix: 16) ?? 0xFF8FB4FF,
+    );
+    final dark = color.computeLuminance() < 0.35;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final s =
+            (c.biggest.shortestSide.isFinite ? c.biggest.shortestSide : 80)
+                .toDouble();
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF1F4FF), Color(0xFFE4E9FB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Center(
+            child: Container(
+              width: s * 0.62,
+              height: s * 0.62,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(s * 0.18),
+                gradient: LinearGradient(
+                  colors: [Color.lerp(color, Colors.white, 0.25)!, color],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.35),
+                    blurRadius: s * 0.12,
+                    offset: Offset(0, s * 0.05),
+                  ),
+                ],
+              ),
+              child: Icon(
+                _icons[kind] ?? Icons.devices_other_rounded,
+                size: s * 0.34,
+                color: dark ? Colors.white : const Color(0xFF1E293B),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

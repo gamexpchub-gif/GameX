@@ -1512,15 +1512,11 @@ class _QuickGrid extends ConsumerWidget {
         0,
       ),
       (
-        Icons.support_agent_rounded,
-        'Seller\nsupport',
-        C.muted,
-        () => snack(
-          context,
-          'Call 1800-120-4263 • support@gamex.in',
-          icon: Icons.support_agent_rounded,
-        ),
-        0,
+        Icons.handshake_rounded,
+        'Buyer\noffers',
+        C.amber,
+        () => context.push('/offers'),
+        ref.watch(pendingOffersProvider),
       ),
     ];
     return GridView.count(

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/router/app_router.dart';
 import 'core/storage.dart';
 import 'core/theme/app_theme.dart';
+import 'features/commerce/services/notification_service.dart';
 import 'features/profile/providers/theme_provider.dart';
 
 Future<void> main() async {
@@ -26,13 +27,15 @@ class GameXShopApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MaterialApp.router(
-      title: 'GameX Shop',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ref.watch(themeModeProvider),
-      routerConfig: appRouter,
+    return NotificationsHost(
+      child: MaterialApp.router(
+        title: 'GameX Shop',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ref.watch(themeModeProvider),
+        routerConfig: appRouter,
+      ),
     );
   }
 }

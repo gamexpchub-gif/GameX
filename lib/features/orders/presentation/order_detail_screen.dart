@@ -8,6 +8,7 @@ import '../../../core/widgets/common.dart';
 import '../../../data/models/order.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../commerce/data/protection.dart';
 import '../providers/orders_provider.dart';
 import '../../trust/presentation/order_trust_section.dart';
 import 'orders_screen.dart';
@@ -95,9 +96,35 @@ class OrderDetailScreen extends ConsumerWidget {
                 color: AppColors.primary,
               ),
               title: const Text('Payment'),
-              subtitle: Text(order.paymentMethod.label),
+              subtitle: Text(
+                order.paymentNote == null
+                    ? order.paymentMethod.label
+                    : '${order.paymentMethod.label}\n${order.paymentNote}',
+              ),
+              isThreeLine: order.paymentNote != null,
             ),
           ),
+          if (order.tradeIn != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.currency_exchange_rounded,
+                  color: AppColors.success,
+                ),
+                title: Text(
+                  'Exchange: ${order.tradeIn!['model']} • −${formatPrice((order.tradeIn!['amount'] as num).toDouble())}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  order.isDelivered
+                      ? 'Old phone collected at delivery'
+                      : 'Keep your old phone ready. Sign out of iCloud / Google and hand it over at delivery (${order.tradeIn!['condition']}).',
+                ),
+                isThreeLine: !order.isDelivered,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Card(
             child: Padding(
@@ -131,7 +158,10 @@ class OrderDetailScreen extends ConsumerWidget {
                                 Text(
                                   [
                                     'Qty ${item.quantity}',
-                                    if (item.size != null) 'Size ${item.size}',
+                                    if (item.size != null) item.size!,
+                                    if (protectionById(item.protection) != null)
+                                      protectionById(item.protection)!.short,
+                                    if (item.offerId != null) 'Offer price',
                                   ].join(' · '),
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.outline,
@@ -154,6 +184,7 @@ class OrderDetailScreen extends ConsumerWidget {
                       deliveryFee: order.deliveryFee,
                       discount: order.discount,
                     ),
+                    extraLines: order.lines,
                   ),
                 ],
               ),

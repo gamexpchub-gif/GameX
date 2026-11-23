@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  TrendingUp,
   ChevronDown,
   Image,
   LayoutDashboard,
@@ -31,6 +32,7 @@ import Login from './pages/Login';
 import QcQueue from './pages/QcQueue';
 import Sellers from './pages/Sellers';
 import Returns from './pages/Returns';
+import Growth from './pages/Growth';
 
 export default function App() {
   const session = useSession();
@@ -53,6 +55,9 @@ function Shell() {
       d.orders.filter((o) => o.returnRequest && ['requested', 'pickup_scheduled', 'picked_up'].includes(o.returnRequest.status)).length +
       d.claims.filter((c) => ['submitted', 'approved'].includes(c.status)).length,
   );
+  const openGrowth = useDB(
+    (d) => d.tradeIns.filter((t) => ['awaitingPickup', 'pickedUp'].includes(t.status)).length + d.offers.filter((o) => o.status === 'pending').length,
+  );
   const nav = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/qc', label: 'QC Checking', icon: ShieldCheck, badge: pendingQc, live: true },
@@ -61,6 +66,7 @@ function Shell() {
     { to: '/sellers', label: 'Sellers', icon: Store, badge: pendingSellers },
     { to: '/customers', label: 'Customers', icon: Users },
     { to: '/returns', label: 'Returns & Claims', icon: RotateCcw, badge: openReturns },
+    { to: '/growth', label: 'Growth & Payments', icon: TrendingUp, badge: openGrowth },
     { to: '/live', label: 'Live Reviews', icon: Video, badge: pendingLive },
     { to: '/banners', label: 'Home Banners', icon: Image },
     { to: '/coupons', label: 'Coupons', icon: Ticket },
@@ -137,6 +143,7 @@ function Shell() {
               <Route path="/live" element={<LiveReviews />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/returns" element={<Returns />} />
+              <Route path="/growth" element={<Growth />} />
               <Route path="/banners" element={<Banners />} />
               <Route path="/coupons" element={<Coupons />} />
               <Route path="/settings" element={<Settings />} />

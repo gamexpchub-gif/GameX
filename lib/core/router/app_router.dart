@@ -8,6 +8,12 @@ import '../../features/catalog/presentation/categories_screen.dart';
 import '../../features/catalog/presentation/category_products_screen.dart';
 import '../../features/checkout/presentation/checkout_screen.dart';
 import '../../features/checkout/presentation/order_success_screen.dart';
+import '../../features/commerce/presentation/alerts_screen.dart';
+import '../../features/commerce/presentation/emi_screen.dart';
+import '../../features/commerce/presentation/offers_screen.dart';
+import '../../features/commerce/presentation/sale_screen.dart';
+import '../../features/commerce/presentation/trade_in_screen.dart';
+import '../../features/commerce/presentation/wallet_screen.dart';
 import '../../features/discover/data/phone_filter.dart';
 import '../../features/discover/presentation/compare_screen.dart';
 import '../../features/discover/presentation/explore_screen.dart';
@@ -103,6 +109,28 @@ final appRouter = GoRouter(
       ),
     ),
     GoRoute(path: '/compare', builder: (_, _) => const CompareScreen()),
+    GoRoute(
+      path: '/trade-in',
+      builder: (_, s) => TradeInScreen(
+        newPhonePrice:
+            double.tryParse(s.uri.queryParameters['price'] ?? '') ?? 0,
+      ),
+    ),
+    GoRoute(
+      path: '/emi',
+      builder: (_, s) => EmiScreen(
+        price: double.tryParse(s.uri.queryParameters['price'] ?? '') ?? 0,
+        name: s.uri.queryParameters['name'],
+      ),
+    ),
+    GoRoute(path: '/offers', builder: (_, _) => const OffersScreen()),
+    GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
+    GoRoute(
+      path: '/notifications',
+      builder: (_, _) => const NotificationsScreen(),
+    ),
+    GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
+    GoRoute(path: '/sale', builder: (_, _) => const SaleScreen()),
     GoRoute(path: '/finder', builder: (_, _) => const FinderScreen()),
     GoRoute(path: '/trust', builder: (_, _) => const TrustHubScreen()),
     GoRoute(

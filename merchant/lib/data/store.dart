@@ -84,6 +84,7 @@ class SellerData {
     this.live = const [],
     this.payouts = const [],
     this.notices = const [],
+    this.offers = const [],
     this.insights = const Insights(),
     this.syncedAt,
     this.syncing = false,
@@ -95,6 +96,7 @@ class SellerData {
   final List<LiveCall> live;
   final List<Payout> payouts;
   final List<Notice> notices;
+  final List<BuyerOffer> offers;
   final Insights insights;
   final DateTime? syncedAt;
   final bool syncing;
@@ -110,6 +112,7 @@ class SellerData {
     List<LiveCall>? live,
     List<Payout>? payouts,
     List<Notice>? notices,
+    List<BuyerOffer>? offers,
     Insights? insights,
     DateTime? syncedAt,
     bool? syncing,
@@ -121,6 +124,7 @@ class SellerData {
     live: live ?? this.live,
     payouts: payouts ?? this.payouts,
     notices: notices ?? this.notices,
+    offers: offers ?? this.offers,
     insights: insights ?? this.insights,
     syncedAt: syncedAt ?? this.syncedAt,
     syncing: syncing ?? this.syncing,
@@ -133,6 +137,7 @@ class SellerData {
     'live': live.map((e) => e.toJson()).toList(),
     'payouts': payouts.map((e) => e.toJson()).toList(),
     'notifications': notices.map((e) => e.toJson()).toList(),
+    'offers': offers.map((e) => e.toJson()).toList(),
     'insights': insights.toJson(),
     'syncedAt': syncedAt?.toIso8601String(),
   };
@@ -151,6 +156,8 @@ class SellerData {
       ..sort((a, b) => b.at.compareTo(a.at)),
     notices: _list(j['notifications'], Notice.fromJson)
       ..sort((a, b) => b.at.compareTo(a.at)),
+    offers: _list(j['offers'], BuyerOffer.new)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
     insights: Insights.fromJson(
       (j['insights'] as Map?)?.cast<String, dynamic>() ?? const {},
     ),
@@ -290,8 +297,29 @@ class SyncNotifier extends Notifier<SellerData> {
   );
 
   /// Open-box delivery: needs the 4-digit OTP from the buyer's app.
-  Future<void> deliver(String id, String otp) =>
-      orderAction(id, 'deliver', {'otp': otp});
+  Future<void> deliver(
+    String id,
+    String otp, {
+    bool tradeInCollected = false,
+  }) => orderAction(id, 'deliver', {
+    'otp': otp,
+    if (tradeInCollected) 'tradeInCollected': true,
+  });
+
+  // ----- Offers -----
+
+  /// accept | reject | counter (with [amount]).
+  Future<void> offerAction(
+    String id,
+    String action, {
+    int? amount,
+    String? reason,
+  }) => _do(
+    (sid) => _api.post('/seller/$sid/offers/$id/$action', {
+      'amount': ?amount,
+      'reason': ?reason,
+    }),
+  );
 
   Future<void> sendLiveMessage(String id, String text) =>
       _do((sid) => _api.post('/seller/$sid/live/$id/messages', {'text': text}));
@@ -368,6 +396,14 @@ final payoutsProvider = Provider<List<Payout>>(
 );
 final noticesProvider = Provider<List<Notice>>(
   (ref) => ref.watch(syncProvider.select((d) => d.notices)),
+);
+
+final offersProvider = Provider<List<BuyerOffer>>(
+  (ref) => ref.watch(syncProvider).offers,
+);
+
+final pendingOffersProvider = Provider<int>(
+  (ref) => ref.watch(offersProvider).where((o) => o.pending).length,
 );
 
 final listingByIdProvider = Provider.family<Listing?, String>(

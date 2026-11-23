@@ -79,6 +79,27 @@ class PaymentMark extends StatelessWidget {
             ],
           ),
         );
+      case PaymentMethod.emi:
+        return box(
+          const Color(0xFFEDE7FF),
+          Text(
+            'EMI',
+            style: TextStyle(
+              color: const Color(0xFF6D28D9),
+              fontWeight: FontWeight.w900,
+              fontSize: size * 0.3,
+            ),
+          ),
+        );
+      case PaymentMethod.payLater:
+        return box(
+          const Color(0xFFFFF1E0),
+          Icon(
+            Icons.schedule_rounded,
+            color: const Color(0xFFEA580C),
+            size: size * 0.55,
+          ),
+        );
     }
   }
 }

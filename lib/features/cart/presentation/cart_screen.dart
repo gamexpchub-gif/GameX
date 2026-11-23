@@ -15,6 +15,9 @@ import '../../auth/providers/auth_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
 import '../../checkout/presentation/widgets/address_sheets.dart';
 import '../../checkout/providers/address_provider.dart';
+import '../../commerce/data/protection.dart';
+import '../../commerce/presentation/widgets/commerce_widgets.dart';
+import '../../commerce/providers/checkout_extras.dart' show protectionTotal;
 import '../../wishlist/providers/wishlist_provider.dart';
 import '../providers/cart_provider.dart';
 import 'widgets/price_details.dart';
@@ -162,6 +165,8 @@ class CartScreen extends ConsumerWidget {
                     _CartItemCard(item: item),
                     const SizedBox(height: 12),
                   ],
+                  const CrossSellCard(),
+                  const SizedBox(height: 12),
                   const _CouponCard(),
                   const SizedBox(height: 12),
                   SectionCard(
@@ -176,6 +181,10 @@ class CartScreen extends ConsumerWidget {
                         SummaryLines(
                           summary: ref.watch(cartSummaryProvider),
                           couponCode: ref.watch(promoProvider),
+                          extraLines: [
+                            if (protectionTotal(selected) > 0)
+                              ('Protection plans', protectionTotal(selected)),
+                          ],
                         ),
                       ],
                     ),
@@ -474,6 +483,29 @@ class _CartItemCard extends ConsumerWidget {
                 ),
               ],
             ),
+            if (item.offerId != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8, left: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.handshake_rounded,
+                      size: 16,
+                      color: AppColors.success,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Your offer price',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (canProtect(p.categoryId)) _ProtectionLine(item: item),
             const Divider(height: 18),
             Row(
               children: [
@@ -666,7 +698,9 @@ class _CheckoutBar extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  formatPrice(s.total),
+                  formatPrice(
+                    s.total + protectionTotal(ref.watch(selectedCartProvider)),
+                  ),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -701,6 +735,108 @@ class _CheckoutBar extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Add protection" / chosen plan on a cart line.
+class _ProtectionLine extends ConsumerWidget {
+  const _ProtectionLine({required this.item});
+  final CartItem item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = protectionById(item.protection);
+    final from = kProtectionPlans
+        .map((x) => x.priceFor(item.product.price))
+        .reduce((a, b) => a < b ? a : b);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 12, right: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) => Consumer(
+            builder: (context, ref, _) {
+              final live = ref
+                  .watch(cartProvider)
+                  .firstWhere((c) => c.key == item.key, orElse: () => item);
+              return SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Protect your ${item.product.name}',
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ProtectionPicker(
+                        phonePrice: item.product.price,
+                        selected: live.protection,
+                        onChanged: (id) {
+                          ref
+                              .read(cartProvider.notifier)
+                              .setProtection(item.key, id);
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: plan == null
+                ? const Color(0xFFF3F0FF)
+                : AppColors.success.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                plan?.icon ?? Icons.shield_outlined,
+                size: 18,
+                color: plan == null
+                    ? const Color(0xFF7B3DF5)
+                    : AppColors.success,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  plan == null
+                      ? 'Add screen damage / extended warranty from ${formatPrice(from)}'
+                      : '${plan.title} • ${formatPrice(plan.priceFor(item.product.price))}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: plan == null
+                        ? const Color(0xFF7B3DF5)
+                        : AppColors.success,
+                  ),
+                ),
+              ),
+              Text(
+                plan == null ? 'Add' : 'Change',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

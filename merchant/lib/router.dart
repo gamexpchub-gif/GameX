@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'data/store.dart';
+import 'features/offers/offers_screen.dart';
 import 'features/account/account_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/earnings/earnings_screen.dart';
@@ -90,6 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ListingEditorScreen(listingId: s.pathParameters['id']),
       ),
       GoRoute(path: '/live', builder: (_, _) => const LiveCallsScreen()),
+      GoRoute(path: '/offers', builder: (_, _) => const OffersScreen()),
     ],
   );
 });

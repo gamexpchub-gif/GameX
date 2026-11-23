@@ -4,7 +4,9 @@ enum PaymentMethod {
   cashOnDelivery('Cash on Delivery'),
   bkash('UPI'),
   nagad('Wallets'),
-  card('Debit / Credit Card');
+  card('Debit / Credit Card'),
+  emi('EMI'),
+  payLater('Pay Later');
 
   const PaymentMethod(this.label);
   final String label;
@@ -84,6 +86,9 @@ class Order {
     required this.discount,
     required this.createdAt,
     this.status = OrderStatus.pending,
+    this.lines = const [],
+    this.paymentNote,
+    this.tradeIn,
   });
 
   final String id;
@@ -96,7 +101,18 @@ class Order {
   final DateTime createdAt;
   final OrderStatus status;
 
-  double get total => subtotal + deliveryFee - discount;
+  /// Extra price lines (label, amount): protection plans add, trade-in,
+  /// wallet, bank and festival discounts subtract (negative amounts).
+  final List<(String, double)> lines;
+
+  /// e.g. "No-cost EMI • HDFC Bank • 6 × ₹8,333".
+  final String? paymentNote;
+
+  /// Trade-in attached to this order (model, amount, condition…).
+  final Map<String, dynamic>? tradeIn;
+
+  double get total =>
+      subtotal + deliveryFee - discount + lines.fold(0.0, (s, l) => s + l.$2);
 
   /// True when any item was sold by a GAMEX marketplace seller.
   bool get hasSellerItems => items.any((i) => i.product.id.startsWith('GXL'));
@@ -111,6 +127,9 @@ class Order {
     discount: discount,
     createdAt: createdAt,
     status: s,
+    lines: lines,
+    paymentNote: paymentNote,
+    tradeIn: tradeIn,
   );
 
   /// Expected delivery (4 days after ordering) / actual delivery (2 days).
@@ -136,6 +155,12 @@ class Order {
     discount: (json['discount'] as num).toDouble(),
     createdAt: DateTime.parse(json['createdAt'] as String),
     status: OrderStatus.values.byName(json['status'] as String),
+    lines: [
+      for (final l in (json['lines'] as List? ?? const []).cast<Map>())
+        (l['label'] as String, (l['amount'] as num).toDouble()),
+    ],
+    paymentNote: json['paymentNote'] as String?,
+    tradeIn: (json['tradeIn'] as Map?)?.cast<String, dynamic>(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -148,5 +173,11 @@ class Order {
     'discount': discount,
     'createdAt': createdAt.toIso8601String(),
     'status': status.name,
+    if (lines.isNotEmpty)
+      'lines': [
+        for (final l in lines) {'label': l.$1, 'amount': l.$2},
+      ],
+    if (paymentNote != null) 'paymentNote': paymentNote,
+    if (tradeIn != null) 'tradeIn': tradeIn,
   };
 }

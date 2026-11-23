@@ -58,6 +58,25 @@ class CartNotifier extends Notifier<List<CartItem>> {
 
   void remove(String key) => _save(state.where((i) => i.key != key).toList());
 
+  /// Sets (or clears) the protection plan on a cart line.
+  void setProtection(String key, String? planId) => _save([
+    for (final i in state)
+      if (i.key == key) i.copyWith(protection: () => planId) else i,
+  ]);
+
+  /// Adds a phone at an accepted Make-an-Offer price (replacing any line
+  /// for the same phone).
+  void addDeal(Product product, double price, String offerId) {
+    final deal = product.copyWith(price: price, oldPrice: product.mrp);
+    _save([
+      ...state.where((i) => i.product.id != product.id),
+      CartItem(product: deal, quantity: 1, offerId: offerId),
+    ]);
+  }
+
+  bool contains(String productId) =>
+      state.any((i) => i.product.id == productId);
+
   /// Removes several lines at once (e.g. the ones just ordered).
   void removeKeys(Set<String> keys) =>
       _save(state.where((i) => !keys.contains(i.key)).toList());

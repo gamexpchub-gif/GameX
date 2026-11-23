@@ -534,7 +534,9 @@ void showPaymentMethodsSheet(BuildContext context) => _sheet(
             PaymentMethod.cashOnDelivery => 'Pay when the phone arrives',
             PaymentMethod.bkash => 'Google Pay, PhonePe, Paytm & more',
             PaymentMethod.nagad => 'Paytm, Amazon Pay & Mobikwik',
-            PaymentMethod.card => 'Visa, Mastercard, Amex • EMI',
+            PaymentMethod.card => 'Visa, Mastercard, Amex',
+            PaymentMethod.emi => 'No-cost EMI on 6 banks',
+            PaymentMethod.payLater => 'Pay in 15 days or in 3 parts',
           }),
           trailing: const Icon(
             Icons.check_circle_rounded,
