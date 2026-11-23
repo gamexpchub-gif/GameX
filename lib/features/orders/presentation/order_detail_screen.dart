@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -71,6 +72,28 @@ class OrderDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
+          if (order.status != OrderStatus.cancelled) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => context.push('/track/${order.id}'),
+                    icon: const Icon(Icons.location_on_rounded),
+                    label: const Text('Track order'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push('/track/${order.id}'),
+                    icon: const Icon(Icons.receipt_long_rounded),
+                    label: const Text('GST invoice'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if (order.hasSellerItems) OrderTrustSection(orderId: order.id),
           Card(
             child: ListTile(

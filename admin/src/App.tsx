@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import {
   Bell,
   TrendingUp,
+  Wrench,
   ChevronDown,
   Image,
   LayoutDashboard,
@@ -33,6 +34,7 @@ import QcQueue from './pages/QcQueue';
 import Sellers from './pages/Sellers';
 import Returns from './pages/Returns';
 import Growth from './pages/Growth';
+import ServiceDesk from './pages/ServiceDesk';
 
 export default function App() {
   const session = useSession();
@@ -58,6 +60,9 @@ function Shell() {
   const openGrowth = useDB(
     (d) => d.tradeIns.filter((t) => ['awaitingPickup', 'pickedUp'].includes(t.status)).length + d.offers.filter((o) => o.status === 'pending').length,
   );
+  const openService = useDB(
+    (d) => d.repairs.filter((r) => ['booked', 'assigned', 'inRepair'].includes(r.status)).length + d.sellRequests.filter((s) => ['requested', 'scheduled', 'pickedUp'].includes(s.status)).length,
+  );
   const nav = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/qc', label: 'QC Checking', icon: ShieldCheck, badge: pendingQc, live: true },
@@ -67,6 +72,7 @@ function Shell() {
     { to: '/customers', label: 'Customers', icon: Users },
     { to: '/returns', label: 'Returns & Claims', icon: RotateCcw, badge: openReturns },
     { to: '/growth', label: 'Growth & Payments', icon: TrendingUp, badge: openGrowth },
+    { to: '/service', label: 'Service Desk', icon: Wrench, badge: openService },
     { to: '/live', label: 'Live Reviews', icon: Video, badge: pendingLive },
     { to: '/banners', label: 'Home Banners', icon: Image },
     { to: '/coupons', label: 'Coupons', icon: Ticket },
@@ -144,6 +150,7 @@ function Shell() {
               <Route path="/customers" element={<Customers />} />
               <Route path="/returns" element={<Returns />} />
               <Route path="/growth" element={<Growth />} />
+              <Route path="/service" element={<ServiceDesk />} />
               <Route path="/banners" element={<Banners />} />
               <Route path="/coupons" element={<Coupons />} />
               <Route path="/settings" element={<Settings />} />

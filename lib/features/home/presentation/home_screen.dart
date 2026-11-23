@@ -7,17 +7,14 @@ import '../../../core/widgets/common.dart';
 import '../../../core/widgets/glass.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../../data/models/product.dart';
-import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
-import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../commerce/services/notification_service.dart';
 import '../../discover/presentation/widgets/home_discover.dart';
-import '../../wishlist/providers/wishlist_provider.dart';
 import 'widgets/design_scale.dart';
 import 'widgets/hero_banner.dart';
 import 'widgets/home_header.dart';
+import 'widgets/home_compact.dart';
 import 'widgets/home_sections.dart';
-import 'widgets/home_sheets.dart';
 
 /// Brand pre-selected in "Popular Brands", as in the design.
 final selectedBrandProvider = NotifierProvider<_SelectedBrand, String>(
@@ -108,57 +105,43 @@ class HomeScreen extends ConsumerWidget {
                           error: (_, _) => const SizedBox.shrink(),
                         ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 21 * k)),
-                  SliverToBoxAdapter(
-                    child: FeatureRow(
-                      onTap: (i) => showFeatureSheet(context, i),
-                    ),
-                  ),
-                  SliverToBoxAdapter(child: SizedBox(height: 28 * k)),
-                  SliverToBoxAdapter(
-                    child: OfferCard(
-                      tradeInUpTo: 15000,
-                      emiFrom: 999,
-                      onExchange: () => context.push('/trade-in'),
-                      onEmi: () => context.push('/emi'),
-                    ),
-                  ),
-                  SliverToBoxAdapter(child: SizedBox(height: 28 * k)),
-                  SliverToBoxAdapter(
-                    child: FestivalSaleBanner(
-                      padding: EdgeInsets.fromLTRB(35 * k, 0, 35 * k, 22 * k),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: DiscoverToolsCard()),
-                  SliverToBoxAdapter(child: SizedBox(height: 30 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 14 * k)),
+                  const SliverToBoxAdapter(child: QuickActionGrid()),
+                  SliverToBoxAdapter(child: SizedBox(height: 14 * k)),
+                  const SliverToBoxAdapter(child: SaleStrip()),
+                  SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
                   const SliverToBoxAdapter(child: ForYouRail()),
-                  SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
-                  const SliverToBoxAdapter(child: RecentlyViewedRail()),
-                  SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(
-                      title: 'Popular Brands',
-                      trailing: SeeAllButton(
-                        onTap: () => context.go('/categories'),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(child: SizedBox(height: 20 * k)),
-                  SliverToBoxAdapter(child: _Brands()),
-                  SliverToBoxAdapter(child: SizedBox(height: 34 * k)),
-                  SliverToBoxAdapter(
-                    child: HomeSectionTitle(
-                      title: 'Top Deals for You',
+                      title: 'Top Deals',
                       leading: Image.asset(
                         'assets/images/home/icon_sparkle.png',
-                        width: 42 * k,
-                        height: 48 * k,
+                        width: 36 * k,
+                        height: 42 * k,
                       ),
                       trailing: const DealCountdown(),
                     ),
                   ),
+                  SliverToBoxAdapter(child: SizedBox(height: 12 * k)),
+                  SliverToBoxAdapter(child: _Brands()),
+                  SliverToBoxAdapter(child: SizedBox(height: 10 * k)),
+                  SliverToBoxAdapter(
+                    child: ref
+                        .watch(topDealsProvider)
+                        .when(
+                          data: (list) => DealsRail(items: list),
+                          loading: () => const SizedBox(height: 236),
+                          error: (_, _) =>
+                              ErrorRetry(onRetry: () => _refresh(ref)),
+                        ),
+                  ),
+                  SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
+                  const SliverToBoxAdapter(child: RecentlyViewedRail()),
+                  SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
+                  const SliverToBoxAdapter(child: TrustStrip()),
                   SliverToBoxAdapter(child: SizedBox(height: 16 * k)),
-                  ..._deals(context, ref, k),
+                  const SliverToBoxAdapter(child: ExploreAllButton()),
                   SliverToBoxAdapter(
                     child: SizedBox(height: mq.padding.bottom + 24 * k),
                   ),
@@ -169,55 +152,6 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  List<Widget> _deals(BuildContext context, WidgetRef ref, double k) {
-    return ref
-        .watch(topDealsProvider)
-        .when(
-          loading: () => [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 35 * k),
-                child: Skeleton(height: 284 * k, radius: 30 * k),
-              ),
-            ),
-          ],
-          error: (_, _) => [
-            SliverToBoxAdapter(child: ErrorRetry(onRetry: () => _refresh(ref))),
-          ],
-          data: (list) => [
-            SliverList.separated(
-              itemCount: list.length,
-              separatorBuilder: (_, _) => SizedBox(height: 22 * k),
-              itemBuilder: (context, i) {
-                final p = list[i];
-                return DealCard(
-                  product: p,
-                  ribbon: i == 0 ? 'Best Deal' : null,
-                  wished: ref.watch(isWishlistedProvider(p.id)),
-                  onTap: () => context.push('/product/${p.id}'),
-                  onWish: () {
-                    HapticFeedback.lightImpact();
-                    ref.read(wishlistProvider.notifier).toggle(p);
-                  },
-                  onAddToCart: p.inStock
-                      ? () {
-                          HapticFeedback.mediumImpact();
-                          ref.read(cartProvider.notifier).add(p);
-                          showAppSnack(
-                            context,
-                            '${p.name} added to cart',
-                            action: 'VIEW',
-                            onAction: () => context.push('/cart'),
-                          );
-                        }
-                      : null,
-                );
-              },
-            ),
-          ],
-        );
   }
 }
 

@@ -1026,6 +1026,24 @@ class _MenuCard extends StatelessWidget {
           () => context.push('/trade-in'),
         ),
         (
+          Icons.sell_outlined,
+          'Sell Your Phone',
+          'Instant price, free pickup, paid in 24 hours',
+          () => context.push('/sell'),
+        ),
+        (
+          Icons.build_outlined,
+          'Repairs',
+          'Screen, battery & more with repair warranty',
+          () => context.push('/repair'),
+        ),
+        (
+          Icons.health_and_safety_outlined,
+          'Phone Setup & Health Check',
+          'Test your phone and move your data',
+          () => context.push('/setup'),
+        ),
+        (
           Icons.credit_card_rounded,
           'EMI & Pay Later',
           'No-cost EMI calculator and Pay Later options',

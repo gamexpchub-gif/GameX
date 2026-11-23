@@ -48,6 +48,9 @@ dependencies:
   url_launcher: ^6.3.3
   speech_to_text: ^7.5.0
   flutter_local_notifications: ^23.0.4
+  pdf: ^3.13.1
+  printing: ^5.15.1
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:

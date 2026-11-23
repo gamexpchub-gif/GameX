@@ -8,6 +8,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/brand_marks.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../discover/presentation/filter_sheet.dart' show FChip;
+import '../../service/presentation/repair_screen.dart' show showSellPickupSheet;
 import '../../trust/presentation/widgets/trust_ui.dart';
 import '../data/commerce_api.dart';
 import '../data/tradein.dart';
@@ -16,7 +17,10 @@ import '../providers/checkout_extras.dart';
 /// Exchange / trade-in: model + condition → instant quote → used as credit
 /// at checkout. The old phone is collected when the new one is delivered.
 class TradeInScreen extends ConsumerStatefulWidget {
-  const TradeInScreen({super.key, this.newPhonePrice = 0});
+  const TradeInScreen({super.key, this.newPhonePrice = 0, this.sell = false});
+
+  /// "Sell to GAMEX": no new phone, pickup + payout instead of a credit.
+  final bool sell;
 
   /// Price of the phone being bought (unlocks the exchange bonus).
   final double newPhonePrice;
@@ -41,6 +45,7 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
   static const _steps = 4;
 
   double get _price {
+    if (widget.sell) return 0;
     if (widget.newPhonePrice > 0) return widget.newPhonePrice;
     return ref.read(selectedCartProvider).fold(0.0, (s, i) => s + i.total);
   }
@@ -115,7 +120,7 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
         if (!did) _back();
       },
       child: TrustScaffold(
-        title: 'Exchange your phone',
+        title: widget.sell ? 'Sell your phone' : 'Exchange your phone',
         subtitle: _step < _steps
             ? 'Step ${_step + 1} of $_steps'
             : 'Valid for 7 days',
@@ -215,6 +220,14 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
         ],
       );
     }
+    if (_step == _steps && _quote != null && widget.sell) {
+      return TButton(
+        label: 'Sell for ${formatPrice(_quote!.amount)} • schedule pickup',
+        icon: Icons.local_shipping_rounded,
+        gradient: TX.success,
+        onTap: () => showSellPickupSheet(context, _quote!),
+      );
+    }
     if (_step == _steps && _quote != null) {
       final cart = ref.watch(cartCountProvider);
       return TButton(
@@ -241,7 +254,7 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
   }
 
   List<Widget> _brands() => [
-    const _Promise(),
+    _Promise(sell: widget.sell),
     const SizedBox(height: 16),
     GridView.count(
       crossAxisCount: 3,
@@ -555,7 +568,9 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
               ),
             ),
             Text(
-              'Off your new phone • valid till ${DateFormat('d MMM').format(q.expiresAt)}',
+              widget.sell
+                  ? 'Paid to your UPI / bank • valid till ${DateFormat('d MMM').format(q.expiresAt)}'
+                  : 'Off your new phone • valid till ${DateFormat('d MMM').format(q.expiresAt)}',
               style: const TextStyle(color: Colors.white),
             ),
           ],
@@ -590,19 +605,37 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
         ),
       ),
       const TTitle('What happens next'),
-      const TCard(
+      TCard(
         child: Column(
           children: [
-            _StepRow(
-              Icons.shopping_bag_rounded,
-              'Order your new phone',
-              'The quote is taken off your bill at checkout.',
-            ),
-            _StepRow(
-              Icons.local_shipping_rounded,
-              'Swap at your door',
-              'Our delivery partner hands over the new phone and collects the old one after a 2-minute check.',
-            ),
+            if (widget.sell) ...const [
+              _StepRow(
+                Icons.event_available_rounded,
+                'Pick a pickup time',
+                'Free doorstep pickup at a time that suits you.',
+              ),
+              _StepRow(
+                Icons.fact_check_rounded,
+                '2-minute check at your door',
+                'The agent confirms the condition and IMEI, then takes the phone.',
+              ),
+              _StepRow(
+                Icons.payments_rounded,
+                'Get paid',
+                'Money in your UPI or bank account within 24 hours.',
+              ),
+            ] else ...const [
+              _StepRow(
+                Icons.shopping_bag_rounded,
+                'Order your new phone',
+                'The quote is taken off your bill at checkout.',
+              ),
+              _StepRow(
+                Icons.local_shipping_rounded,
+                'Swap at your door',
+                'Our delivery partner hands over the new phone and collects the old one after a 2-minute check.',
+              ),
+            ],
             _StepRow(
               Icons.delete_sweep_rounded,
               'We wipe your data',
@@ -622,28 +655,31 @@ class _TradeInScreenState extends ConsumerState<TradeInScreen> {
 }
 
 class _Promise extends StatelessWidget {
-  const _Promise();
+  const _Promise({this.sell = false});
+  final bool sell;
 
   @override
   Widget build(BuildContext context) => THero(
     child: Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Old phone, new deal',
+                sell ? 'Sell to GAMEX in 60 seconds' : 'Old phone, new deal',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 19,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              SizedBox(height: 4),
+              const SizedBox(height: 4),
               Text(
-                'Instant price • Off your bill • Pickup at delivery • +₹1,000 exchange bonus on phones above ₹30K',
-                style: TextStyle(
+                sell
+                    ? 'Instant price • Free doorstep pickup • Paid to UPI or bank within 24 hours'
+                    : 'Instant price • Off your bill • Pickup at delivery • +₹1,000 exchange bonus on phones above ₹30K',
+                style: const TextStyle(
                   color: Color(0xFFC9D2FF),
                   fontSize: 12.5,
                   height: 1.35,

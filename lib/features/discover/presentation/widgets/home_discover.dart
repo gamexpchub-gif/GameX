@@ -273,10 +273,10 @@ class ForYouRail extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _Rail(
+        HomeRail(
           items: [
             for (final r in recs)
-              _RailCard(product: r.product, tag: r.reason, fair: r.fair),
+              ProductRailCard(product: r.product, tag: r.reason, fair: r.fair),
           ],
         ),
       ],
@@ -305,10 +305,10 @@ class RecentlyViewedRail extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _Rail(
+        HomeRail(
           items: [
             for (final p in list.take(12))
-              _RailCard(
+              ProductRailCard(
                 product: p,
                 fair: fairPriceOf(p, market: pool),
               ),
@@ -319,8 +319,8 @@ class RecentlyViewedRail extends ConsumerWidget {
   }
 }
 
-class _Rail extends StatelessWidget {
-  const _Rail({required this.items});
+class HomeRail extends StatelessWidget {
+  const HomeRail({super.key, required this.items});
   final List<Widget> items;
 
   @override
@@ -336,8 +336,13 @@ class _Rail extends StatelessWidget {
   );
 }
 
-class _RailCard extends StatelessWidget {
-  const _RailCard({required this.product, required this.fair, this.tag});
+class ProductRailCard extends StatelessWidget {
+  const ProductRailCard({
+    super.key,
+    required this.product,
+    required this.fair,
+    this.tag,
+  });
   final Product product;
   final FairPrice fair;
   final String? tag;

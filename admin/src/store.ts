@@ -309,6 +309,32 @@ export interface StockAlert {
   createdAt: string;
 }
 
+export interface ServiceJob {
+  id: string;
+  customerId: string;
+  name: string;
+  phone: string;
+  brand?: string;
+  model?: string;
+  label?: string;
+  issue?: string;
+  quality?: string;
+  price?: number;
+  mode?: string;
+  technician?: string | null;
+  device?: { brand: string; model: string; storage: string; answers: Record<string, string>; faults: string[] };
+  quote?: number;
+  finalAmount?: number | null;
+  payout?: { method: string; upi: string; account: string; ifsc: string };
+  address: string;
+  city: string;
+  slot: string;
+  notes?: string;
+  status: string;
+  createdAt: string;
+  events: Ev[];
+}
+
 export interface DB {
   sellers: Seller[];
   listings: Listing[];
@@ -330,6 +356,8 @@ export interface DB {
   walletTx: WalletTx[];
   alerts: StockAlert[];
   pushTokens: { customerId: string; token: string }[];
+  repairs: ServiceJob[];
+  sellRequests: ServiceJob[];
 }
 
 const EMPTY: DB = {
@@ -352,6 +380,8 @@ const EMPTY: DB = {
   walletTx: [],
   alerts: [],
   pushTokens: [],
+  repairs: [],
+  sellRequests: [],
   settings: {
     storeName: 'GAMEX',
     supportPhone: '',

@@ -15,6 +15,10 @@ import '../../features/commerce/presentation/sale_screen.dart';
 import '../../features/commerce/presentation/trade_in_screen.dart';
 import '../../features/commerce/presentation/wallet_screen.dart';
 import '../../features/discover/data/phone_filter.dart';
+import '../../features/service/presentation/health_check_screen.dart';
+import '../../features/service/presentation/repair_screen.dart';
+import '../../features/service/presentation/setup_screen.dart';
+import '../../features/service/presentation/tracking_screen.dart';
 import '../../features/discover/presentation/compare_screen.dart';
 import '../../features/discover/presentation/explore_screen.dart';
 import '../../features/discover/presentation/finder_screen.dart';
@@ -131,6 +135,26 @@ final appRouter = GoRouter(
     ),
     GoRoute(path: '/wallet', builder: (_, _) => const WalletScreen()),
     GoRoute(path: '/sale', builder: (_, _) => const SaleScreen()),
+    GoRoute(path: '/setup', builder: (_, _) => const SetupScreen()),
+    GoRoute(path: '/repair', builder: (_, _) => const RepairScreen()),
+    GoRoute(
+      path: '/repairs',
+      builder: (_, _) => const ServiceJobsScreen(sell: false),
+    ),
+    GoRoute(path: '/sell', builder: (_, _) => const TradeInScreen(sell: true)),
+    GoRoute(
+      path: '/sell/requests',
+      builder: (_, _) => const ServiceJobsScreen(sell: true),
+    ),
+    GoRoute(path: '/setup/check', builder: (_, _) => const HealthCheckScreen()),
+    GoRoute(
+      path: '/setup/transfer',
+      builder: (_, _) => const TransferGuideScreen(),
+    ),
+    GoRoute(
+      path: '/track/:id',
+      builder: (_, s) => TrackingScreen(orderId: s.pathParameters['id']!),
+    ),
     GoRoute(path: '/finder', builder: (_, _) => const FinderScreen()),
     GoRoute(path: '/trust', builder: (_, _) => const TrustHubScreen()),
     GoRoute(

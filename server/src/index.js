@@ -9,6 +9,7 @@ import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
 import { mountGrowth } from './growth.js';
+import { mountService } from './service.js';
 import { CHECKLIST, buildSeed, imeiFrom, titleOf } from './seed.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,9 +54,11 @@ function migrate() {
   }
   for (const c of db.live) c.messages ??= [];
   growth?.migrate();
+  service?.migrate();
 }
 /** Growth features (offers, wallet, trade-in, alerts). Set up below. */
 let growth;
+let service;
 migrate();
 let saveTimer;
 function save() {
@@ -1039,6 +1042,7 @@ admin.post('/reset', (_, res) => {
 });
 
 growth = mountGrowth({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive });
+service = mountService({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive, notifyCustomer: growth.notifyCustomer });
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 
 // ---------------- Admin panel (built) ----------------
