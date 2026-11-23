@@ -45,6 +45,13 @@ bash scripts/build-release.sh seller   # seller app
 4. Enable the methods you want: UPI, cards, wallets, **EMI** and **Pay Later** (Payment Methods page).
 5. Add keys to the server: `bash deploy/set-secrets.sh` → `3`.
 
+6. Webhooks → Add new webhook: URL `https://admin.deencircle.online/gamex/api/payments/razorpay/webhook`,
+   events `refund.processed`, `refund.failed`, `payment.captured`, any secret → enter the same secret in step 5.
+
+**Refunds are automatic:** when a return is approved for refund, a buyer refuses a prepaid parcel or a
+prepaid order is cancelled, the server refunds through Razorpay. COD orders show up in
+Admin → Returns → **Refunds** as "Pay to bank / UPI"; pay the buyer and press **Mark paid** with the UTR.
+
 Test with `rzp_test_` keys first (Razorpay test cards / UPI `success@razorpay`), then switch to `rzp_live_`.
 
 ## 3. MSG91 (SMS OTP)
@@ -104,6 +111,21 @@ bash deploy/set-secrets.sh   # then press s
 ```
 
 or open Admin → **Settings → Launch setup**.
+
+## Database & backups
+
+The server stores everything in **PostgreSQL** (installed by `deploy.sh`; the old `db.json` is imported
+once automatically). A full backup runs **every night at 03:30** into `/var/backups/gamex`
+(database kept 14 days, uploaded photos 7 days).
+
+```bash
+ssh root@200.234.32.137 gamex-backup            # backup now
+ssh root@200.234.32.137 ls -lh /var/backups/gamex
+ssh root@200.234.32.137 gamex-restore /var/backups/gamex/<file>.dump   # asks you to type RESTORE
+```
+
+Off-site copy (recommended): set up `rclone` on the VPS and add `BACKUP_RCLONE_REMOTE=gdrive:gamex-backups`
+to `/etc/gamex.env`.
 
 ## If something goes wrong
 

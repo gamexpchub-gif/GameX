@@ -59,6 +59,85 @@ else
   echo 'ADMIN_BASE=/gamex' >> "$ENV_FILE"
 fi
 
+say "Database (PostgreSQL) and daily backups"
+apt-get install -y -qq postgresql >/dev/null
+systemctl enable --now postgresql >/dev/null 2>&1
+if ! grep -q '^DATABASE_URL=' "$ENV_FILE"; then
+  DBPASS="$(openssl rand -hex 16)"
+  if runuser -u postgres -- psql -tAc "select 1 from pg_roles where rolname='gamex'" | grep -q 1; then
+    runuser -u postgres -- psql -qc "alter role gamex with login password '$DBPASS'"
+  else
+    runuser -u postgres -- psql -qc "create role gamex with login password '$DBPASS'"
+  fi
+  runuser -u postgres -- psql -tAc "select 1 from pg_database where datname='gamex'" | grep -q 1 \
+    || runuser -u postgres -- createdb -O gamex gamex
+  echo "DATABASE_URL=postgres://gamex:$DBPASS@127.0.0.1:5432/gamex" >> "$ENV_FILE"
+  echo "Created PostgreSQL database 'gamex' (existing data/db.json is imported on first start)."
+fi
+
+cat > /usr/local/sbin/gamex-backup <<'BACKUP'
+#!/usr/bin/env bash
+# Daily GAMEX backup: database dump + photos + config. Keeps 14 days.
+# Optional off-site copy: set BACKUP_RCLONE_REMOTE=remote:folder in /etc/gamex.env
+# (after configuring rclone for root).
+set -euo pipefail
+DIR=/var/backups/gamex
+mkdir -p "$DIR"; chmod 700 "$DIR"
+TS=$(date +%Y%m%d-%H%M)
+runuser -u postgres -- pg_dump -Fc gamex > "$DIR/gamex-db-$TS.dump"
+tar -czf "$DIR/gamex-uploads-$TS.tar.gz" -C /opt/gamex/server uploads
+install -m 600 /etc/gamex.env "$DIR/gamex-env-$TS"
+find "$DIR" -type f -name 'gamex-db-*' -mtime +14 -delete
+find "$DIR" -type f \( -name 'gamex-uploads-*' -o -name 'gamex-env-*' \) -mtime +7 -delete
+REMOTE=$(grep -s '^BACKUP_RCLONE_REMOTE=' /etc/gamex.env | cut -d= -f2- || true)
+if [ -n "$REMOTE" ] && command -v rclone >/dev/null; then
+  rclone copy "$DIR" "$REMOTE" --max-age 25h
+fi
+echo "GAMEX backup done: $DIR/gamex-db-$TS.dump"
+BACKUP
+chmod 700 /usr/local/sbin/gamex-backup
+
+cat > /usr/local/sbin/gamex-restore <<'RESTORE'
+#!/usr/bin/env bash
+# Restore the GAMEX database from a dump:  gamex-restore /var/backups/gamex/gamex-db-YYYYMMDD-HHMM.dump
+set -euo pipefail
+FILE="${1:?Usage: gamex-restore /var/backups/gamex/gamex-db-....dump}"
+[ -f "$FILE" ] || { echo "No such file: $FILE"; exit 1; }
+read -rp "This replaces the live GAMEX database with $FILE. Type RESTORE to continue: " ok
+[ "$ok" = RESTORE ] || exit 1
+/usr/local/sbin/gamex-backup >/dev/null   # safety copy of the current state
+systemctl stop gamex
+runuser -u postgres -- pg_restore --clean --if-exists -d gamex "$FILE"
+systemctl start gamex
+echo "Restored. GAMEX is running again."
+RESTORE
+chmod 700 /usr/local/sbin/gamex-restore
+
+cat > /etc/systemd/system/gamex-backup.service <<'UNIT'
+[Unit]
+Description=GAMEX daily backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gamex-backup
+UNIT
+cat > /etc/systemd/system/gamex-backup.timer <<'UNIT'
+[Unit]
+Description=Run the GAMEX backup every night
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now gamex-backup.timer >/dev/null 2>&1
+echo "Nightly backups: /var/backups/gamex (database 14 days, photos 7 days)"
+
 cat > /etc/systemd/system/gamex.service <<EOF
 [Unit]
 Description=GAMEX marketplace server
@@ -95,6 +174,8 @@ curl -fs http://127.0.0.1:8080/api/health >/dev/null || {
   exit 1
 }
 echo "GAMEX server is running (systemd service: gamex)"
+# First backup right after the database is in use.
+ls /var/backups/gamex/gamex-db-* >/dev/null 2>&1 || /usr/local/sbin/gamex-backup || warn "First backup failed - check: journalctl -u gamex-backup"
 
 say "Configuring nginx: $DOMAIN/gamex -> GAMEX"
 # GAMEX (admin panel + API + photos) lives entirely under /gamex/.

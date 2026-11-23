@@ -58,7 +58,11 @@ while true; do
       echo "  Razorpay Dashboard → Account & Settings → API Keys (use rzp_test_ first, then rzp_live_)"
       i=$(ask "Key ID (rzp_...)"); k=$(secret "Key Secret")
       [[ "$i" == rzp_* ]] || { echo "  ✗ Key ID must start with rzp_"; continue; }
-      need secret "$k" && SET+=("RAZORPAY_KEY_ID=$i" "RAZORPAY_KEY_SECRET=$k") && echo "  ✓ Razorpay queued" ;;
+      echo "  Webhook (for automatic refund status): Razorpay → Webhooks → Add"
+      echo "    URL: https://admin.deencircle.online/gamex/api/payments/razorpay/webhook"
+      echo "    Events: refund.processed, refund.failed, payment.captured — choose any secret"
+      w=$(secret "Webhook secret (Enter to skip)")
+      need secret "$k" && SET+=("RAZORPAY_KEY_ID=$i" "RAZORPAY_KEY_SECRET=$k") && { [ -n "$w" ] && SET+=("RAZORPAY_WEBHOOK_SECRET=$w"); true; } && echo "  ✓ Razorpay queued" ;;
     4)
       echo "  Firebase console → Project settings → Service accounts → Generate new private key"
       p=$(ask "Path to the downloaded JSON file")

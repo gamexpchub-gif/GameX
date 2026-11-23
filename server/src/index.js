@@ -9,6 +9,7 @@ import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
 import { mountAuth } from './auth.js';
+import { openStore } from './storage.js';
 import { mountGrowth } from './growth.js';
 import { mountService } from './service.js';
 import { mountLaunch, otpProvider } from './launch.js';
@@ -25,12 +26,9 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@gamex.in';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gamex@123';
 
 // ---------------- Storage ----------------
-let db;
-try {
-  db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-} catch {
-  db = buildSeed();
-}
+// PostgreSQL when DATABASE_URL is set, otherwise data/db.json (development).
+const store = await openStore({ file: DB_FILE, url: process.env.DATABASE_URL, seed: buildSeed });
+let db = store.db;
 // Bring databases created by older versions up to date.
 function migrate() {
   db.blacklist ??= buildSeed().blacklist;
@@ -70,11 +68,22 @@ let saveTimer;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
-    fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db));
-    fs.renameSync(DB_FILE + '.tmp', DB_FILE);
+    saveTimer = null;
+    store.persist(db).catch((e) => console.error('[storage]', e.message));
   }, 150);
 }
+// Write pending changes before the service stops (deploys, restarts).
+async function shutdown() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  await store.persist(db).catch(() => {});
+  await store.close().catch(() => {});
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 save();
 
 const now = () => new Date().toISOString();
@@ -96,7 +105,7 @@ const app = express();
 app.set('trust proxy', 'loopback');
 app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '2mb', verify: (req, _, buf) => (req.rawBody = buf) }));
 // Everything is reachable both at / and under ADMIN_BASE (e.g. /gamex/api),
 // so GAMEX can share a domain with another site that owns the root.
 const site = express.Router();
@@ -131,7 +140,7 @@ auth = mountAuth({
   codeFor: (id) => 'GX' + crypto.createHash('sha1').update(String(id)).digest('hex').slice(0, 6).toUpperCase(),
 });
 
-api.get('/health', (_, res) => res.json({ ok: true, time: now(), listings: db.listings.length }));
+api.get('/health', (_, res) => res.json({ ok: true, time: now(), storage: store.kind, listings: db.listings.length }));
 
 api.post('/upload', upload.single('photo'), (req, res) => {
   if (!req.file) return bad(res, 400, 'No photo received');
@@ -315,6 +324,7 @@ api.post('/orders', (req, res) => {
       city: address.city || '',
       pincode: address.pincode || '',
       payment,
+      paymentId: payment !== 'COD' ? req.body.paymentRef || null : null,
       stage: 'newOrder',
       placedAt: now(),
       events: [{ l: 'Order placed', a: now() }],
@@ -383,7 +393,7 @@ const DAY_MS = 864e5;
 // Customer refuses the phone at the door after the open-box check.
 api.post('/orders/:id/refuse', (req, res) => {
   const o = find('orders', req.params.id);
-  if (!o) return bad(res, 404, 'Order not found');
+  if (!o || o.customerId !== req.customer.id) return bad(res, 404, 'Order not found');
   if (o.stage !== 'shipped') return bad(res, 409, 'You can refuse only while the order is out for delivery');
   const reason = String(req.body?.reason || 'Did not match the listing').slice(0, 200);
   o.stage = 'returned';
@@ -395,6 +405,7 @@ api.post('/orders/:id/refuse', (req, res) => {
     if (l.status === 'soldOut') l.status = 'active';
   }
   notify(o.sellerId, `Order ${o.id} refused at doorstep`, reason, 'order');
+  if (o.payment !== 'COD') launch.refund(o, o.payable ?? o.price, 'Refused at doorstep');
   log(`Order ${o.id} refused at doorstep (${reason})`, 'order');
   save();
   res.json({ ok: true });
@@ -404,6 +415,7 @@ api.post('/orders/:id/refuse', (req, res) => {
 api.post('/returns', (req, res) => {
   const { orderId, reason, details = '', pickupSlot } = req.body || {};
   const o = find('orders', orderId);
+  if (o && o.customerId !== req.customer.id) return bad(res, 404, 'Order not found');
   if (!o) return bad(res, 404, 'Order not found');
   const at = deliveredAt(o);
   if (o.stage !== 'delivered' || !at) return bad(res, 409, 'Only delivered orders can be returned');
@@ -431,6 +443,7 @@ api.post('/returns', (req, res) => {
 api.post('/warranty-claims', (req, res) => {
   const { orderId, issue, description = '', customerId = null } = req.body || {};
   const o = find('orders', orderId);
+  if (o && o.customerId !== req.customer.id) return bad(res, 404, 'Order not found');
   if (!o) return bad(res, 404, 'Order not found');
   const at = deliveredAt(o);
   if (o.stage !== 'delivered' || !at) return bad(res, 409, 'Warranty starts after delivery');
@@ -731,6 +744,7 @@ function orderAction(o, action, body, who) {
       o.cancelReason = body.reason || 'Rejected';
       ev(`Rejected by ${who} • ${o.cancelReason}`);
       growth.onCancelled(o);
+      if (o.payment !== 'COD') launch.refund(o, o.payable ?? o.price, o.cancelReason || 'Order cancelled');
       {
         const l = find('listings', o.listingId);
         if (l) {
@@ -777,6 +791,7 @@ function orderAction(o, action, body, who) {
       o.cancelReason = body.reason || 'Cancelled by GAMEX';
       ev(`Cancelled by ${who} • ${o.cancelReason}`);
       growth.onCancelled(o);
+      if (o.payment !== 'COD') launch.refund(o, o.payable ?? o.price, o.cancelReason || 'Order cancelled');
       break;
     default:
       return 'Unknown action';
@@ -1058,7 +1073,8 @@ admin.post('/returns/:orderId/:action', (req, res) => {
     r.events.push({ l: step[2], a: now() });
     if (a === 'refund') {
       o.stage = 'returned';
-      o.events.push({ l: `Return completed • refund ₹${o.price.toLocaleString('en-IN')}`, a: now() });
+      o.events.push({ l: `Return completed • refund ₹${(r.refund ?? o.price).toLocaleString('en-IN')}`, a: now() });
+      launch.refund(o, r.refund ?? o.payable ?? o.price, 'Return');
     }
   }
   notify(o.sellerId, `Return ${r.status.replace('_', ' ')} • ${o.id}`, o.item, 'order');
@@ -1101,7 +1117,7 @@ admin.post('/reset', (_, res) => {
 });
 
 growth = mountGrowth({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive });
-launch = mountLaunch({ api, site, admin, D: () => db, save, now, uid, find, bad, log, adminBase: ADMIN_BASE });
+launch = mountLaunch({ api, site, admin, D: () => db, save, now, uid, find, bad, log, adminBase: ADMIN_BASE, notifyCustomer: (...a) => growth.notifyCustomer(...a) });
 service = mountService({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive, notifyCustomer: growth.notifyCustomer });
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 

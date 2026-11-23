@@ -25,7 +25,15 @@ export default function Returns() {
   const orders = useDB((d) => d.orders);
   const claims = useDB((d) => d.claims);
   const sellers = useDB((d) => d.sellers);
-  const [tab, setTab] = useState<'returns' | 'claims' | 'refused'>('returns');
+  const [tab, setTab] = useState<'returns' | 'claims' | 'refused' | 'refunds'>('returns');
+  const refunds = orders.filter((o) => o.refund).sort((a, b) => b.refund!.at.localeCompare(a.refund!.at));
+  const refundAct = (o: Order, action: string) => {
+    const note = action === 'manual-done' ? window.prompt('UTR / reference of the bank or UPI transfer:', '') : '';
+    if (action === 'manual-done' && note === null) return;
+    act('POST', `/refunds/${o.id}`, { action, note })
+      .then(() => toast(action === 'retry' ? 'Refund retried' : 'Refund marked as paid - buyer notified'))
+      .catch((e: Error) => toast(e.message));
+  };
   const store = (id: string) => sellers.find((s) => s.id === id)?.storeName ?? id;
 
   const returns = orders.filter((o) => o.returnRequest).sort((a, b) => b.returnRequest!.at.localeCompare(a.returnRequest!.at));
@@ -86,6 +94,7 @@ export default function Returns() {
             { id: 'returns', label: 'Returns', count: returns.length },
             { id: 'claims', label: 'Warranty claims', count: claims.length },
             { id: 'refused', label: 'Refused at door', count: refused.length },
+            { id: 'refunds', label: 'Refunds', count: refunds.filter((o) => ['manual', 'failed', 'pending'].includes(o.refund!.status)).length },
           ]}
         />
       </div>
@@ -198,6 +207,75 @@ export default function Returns() {
               </Card>
             ))}
           </div>
+        ))}
+
+      {tab === 'refunds' &&
+        (refunds.length === 0 ? (
+          <Card>
+            <Empty icon={Wallet} title="No refunds yet" text="Refunds start automatically for returns, doorstep refusals and cancelled prepaid orders." />
+          </Card>
+        ) : (
+          <Card pad={false} className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  {['Order', 'Buyer', 'Amount', 'Reason', 'Status', ''].map((h) => (
+                    <th key={h} className="px-4 py-3 font-semibold">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {refunds.map((o) => {
+                  const r = o.refund!;
+                  const tone: Record<string, 'green' | 'amber' | 'red' | 'blue' | 'slate'> = { processed: 'green', 'manual-done': 'green', pending: 'blue', manual: 'amber', failed: 'red', demo: 'slate' };
+                  const label: Record<string, string> = {
+                    processed: 'Refunded (Razorpay)',
+                    'manual-done': 'Paid manually',
+                    pending: 'Processing (Razorpay)',
+                    manual: 'Pay to bank / UPI',
+                    failed: 'Failed',
+                    demo: 'Demo payment',
+                  };
+                  return (
+                    <tr key={o.id} className="border-t border-slate-100">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-ink">{o.id}</p>
+                        <p className="text-xs text-muted">{o.item}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {o.buyer}
+                        <p className="text-xs text-muted">{o.phone}</p>
+                      </td>
+                      <td className="px-4 py-3 font-bold">{inr(r.amount)}</td>
+                      <td className="px-4 py-3 text-muted">{r.reason}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={tone[r.status]} dot>
+                          {label[r.status]}
+                        </Badge>
+                        {r.id && <p className="mt-1 font-mono text-[11px] text-slate-400">{r.id}</p>}
+                        {r.note && <p className="mt-1 text-xs text-muted">Ref {r.note}</p>}
+                        {r.error && <p className="mt-1 text-xs text-rose-600">{r.error}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {r.status === 'failed' && (
+                          <Button size="sm" variant="secondary" onClick={() => refundAct(o, 'retry')}>
+                            Retry
+                          </Button>
+                        )}
+                        {['manual', 'failed', 'demo'].includes(r.status) && (
+                          <Button size="sm" variant="success" className="ml-2" onClick={() => refundAct(o, 'manual-done')}>
+                            Mark paid
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
         ))}
 
       {tab === 'refused' &&

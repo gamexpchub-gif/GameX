@@ -215,6 +215,102 @@ export function mountLaunch(ctx) {
     return null;
   }
 
+  // ------------------------------------------------------------- Refunds --
+  /**
+   * Refunds [amount] of an order. Online payments go back through Razorpay
+   * automatically; COD / demo orders are marked for a manual bank/UPI refund
+   * that the admin confirms. Never throws.
+   */
+  async function refund(o, amount, reason) {
+    const rupees = Math.max(0, Math.round(Number(amount) || 0));
+    const base = { amount: rupees, reason, at: now() };
+    if (!rupees) return;
+    if (o.refund && ['processed', 'pending', 'manual-done'].includes(o.refund.status)) return;
+    const online = o.payment !== 'COD' && o.paymentId;
+    if (!online) {
+      o.refund = { ...base, status: o.payment === 'COD' ? 'manual' : 'demo' };
+      o.events.push({ l: o.payment === 'COD' ? `Refund ₹${rupees.toLocaleString('en-IN')} to be paid to the buyer's bank/UPI` : `Refund ₹${rupees.toLocaleString('en-IN')} (demo payment)`, a: now() });
+      save();
+      return;
+    }
+    if (!paymentsLive()) {
+      o.refund = { ...base, status: 'demo' };
+      save();
+      return;
+    }
+    try {
+      const r = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(o.paymentId)}/refund`, {
+        method: 'POST',
+        headers: { authorization: rzpAuth(), 'content-type': 'application/json' },
+        body: JSON.stringify({ amount: rupees * 100, speed: 'normal', notes: { orderId: o.id, reason } }),
+      });
+      const j = await r.json();
+      if (!j.id) throw new Error(j.error?.description || 'refund failed');
+      o.refund = { ...base, status: j.status === 'processed' ? 'processed' : 'pending', id: j.id };
+      o.events.push({ l: `Refund ₹${rupees.toLocaleString('en-IN')} sent to the original payment method (${j.id})`, a: now() });
+      ctx.notifyCustomer?.(o.customerId, 'Refund started 💸', `₹${rupees.toLocaleString('en-IN')} for ${o.item} is on its way to your original payment method (5-7 working days).`, 'order', `/order/${o.orderId}`);
+    } catch (e) {
+      o.refund = { ...base, status: 'failed', error: e.message };
+      o.events.push({ l: `Refund failed • ${e.message}`, a: now() });
+    }
+    save();
+  }
+
+  admin.post('/refunds/:id', async (req, res) => {
+    const o = find('orders', req.params.id);
+    if (!o) return bad(res, 404, 'Order not found');
+    const { action, note = '', amount } = req.body || {};
+    if (action === 'retry') {
+      if (o.refund?.status !== 'failed') return bad(res, 409, 'Only failed refunds can be retried');
+      const amt = o.refund.amount;
+      o.refund = null;
+      await refund(o, amt, 'Retry');
+      return res.json(o.refund);
+    }
+    if (action === 'manual-done') {
+      if (!o.refund || !['manual', 'failed', 'demo'].includes(o.refund.status)) return bad(res, 409, 'Nothing to confirm');
+      o.refund.status = 'manual-done';
+      o.refund.note = String(note).slice(0, 120);
+      o.refund.doneAt = now();
+      o.events.push({ l: `Refund paid manually${note ? ` • ${note}` : ''}`, a: now() });
+      ctx.notifyCustomer?.(o.customerId, 'Refund paid 💸', `₹${o.refund.amount.toLocaleString('en-IN')} for ${o.item} has been sent${note ? ` (ref ${note})` : ''}.`, 'order', `/order/${o.orderId}`);
+      save();
+      return res.json(o.refund);
+    }
+    if (action === 'issue') {
+      await refund(o, amount ?? o.payable ?? o.price, String(note || 'Refund by GAMEX'));
+      return res.json(o.refund);
+    }
+    bad(res, 400, 'Unknown action');
+  });
+
+  /** Razorpay webhook (Dashboard → Webhooks, secret = RAZORPAY_WEBHOOK_SECRET). */
+  api.post('/payments/razorpay/webhook', (req, res) => {
+    const secret = env('RAZORPAY_WEBHOOK_SECRET');
+    if (!secret) return bad(res, 404, 'Webhook not configured');
+    const sig = String(req.headers['x-razorpay-signature'] || '');
+    const expected = crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('hex');
+    if (!sig || sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return bad(res, 400, 'Bad signature');
+    }
+    const ev = req.body?.event || '';
+    const db = D();
+    if (ev.startsWith('refund.')) {
+      const r = req.body.payload?.refund?.entity;
+      const o = db.orders.find((x) => x.refund?.id === r?.id);
+      if (o && r) {
+        o.refund.status = ev === 'refund.processed' ? 'processed' : ev === 'refund.failed' ? 'failed' : o.refund.status;
+        o.events.push({ l: `Refund ${o.refund.status}`, a: now() });
+      }
+    } else if (ev === 'payment.captured') {
+      const p = req.body.payload?.payment?.entity;
+      const rec = db.payments.find((x) => x.rzpOrderId === p?.order_id);
+      if (rec && rec.status !== 'paid') Object.assign(rec, { status: 'paid', paymentId: p.id, paidAt: now() });
+    }
+    save();
+    res.json({ ok: true });
+  });
+
   admin.put('/launch-settings', (req, res) => {
     const s = D().settings;
     const { codLimitNew, codMaxOpen, codEnabled, demoCatalog } = req.body || {};
@@ -324,5 +420,5 @@ button{background:#3b5bff;color:#fff;border:0;font-weight:700}</style></head><bo
   };
   site.get('/.well-known/assetlinks.json', assetlinks);
 
-  return { migrate, checkCod, assetlinks, checkOtp };
+  return { migrate, checkCod, assetlinks, checkOtp, refund };
 }

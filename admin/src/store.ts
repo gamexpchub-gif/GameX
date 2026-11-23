@@ -115,6 +115,8 @@ export interface Order {
   warrantyMonths?: number;
   imei?: string;
   returnRequest?: ReturnRequest | null;
+  paymentId?: string | null;
+  refund?: { amount: number; reason: string; at: string; status: 'pending' | 'processed' | 'failed' | 'manual' | 'manual-done' | 'demo'; id?: string; note?: string; error?: string } | null;
 }
 
 export type SellerStatus = 'pending' | 'approved' | 'suspended';
