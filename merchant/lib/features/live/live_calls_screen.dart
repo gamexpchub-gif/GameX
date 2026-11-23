@@ -224,8 +224,31 @@ class _CallCard extends ConsumerWidget {
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => _SellerChat(callId: c.id),
+              ),
+              icon: Badge(
+                isLabelVisible: c.unread > 0,
+                label: Text('${c.unread}'),
+                backgroundColor: C.red,
+                child: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+              label: Text(
+                c.messages.isEmpty
+                    ? 'Message buyer'
+                    : 'Chat (${c.messages.length})',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
           if (c.stage == LiveStage.pending) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
             Row(
               children: [
                 Expanded(
@@ -554,6 +577,166 @@ class _RoundBtn extends StatelessWidget {
           width: 62,
           height: 62,
           child: Icon(icon, color: Colors.white, size: 28),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chat between the seller and the buyer of a live review request.
+class _SellerChat extends ConsumerStatefulWidget {
+  const _SellerChat({required this.callId});
+  final String callId;
+
+  @override
+  ConsumerState<_SellerChat> createState() => _SellerChatState();
+}
+
+class _SellerChatState extends ConsumerState<_SellerChat> {
+  final _text = TextEditingController();
+  Timer? _poll;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => ref.read(syncProvider.notifier).refresh(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final t = _text.text.trim();
+    if (t.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final ok = await runAction(
+      context,
+      () => ref.read(syncProvider.notifier).sendLiveMessage(widget.callId, t),
+    );
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (ok) _text.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ref
+        .watch(liveProvider)
+        .where((x) => x.id == widget.callId)
+        .firstOrNull;
+    if (c == null) return const SizedBox(height: 200);
+    final msgs = c.messages.reversed.toList();
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.75,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              leading: Photo(c.photo, size: 44, radius: 12),
+              title: Text(
+                c.buyer,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('${c.item} • ${c.mode}'),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: msgs.isEmpty
+                  ? const EmptyView(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'No messages yet',
+                      text: 'Say hello and confirm the live review time.',
+                    )
+                  : ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.all(14),
+                      itemCount: msgs.length,
+                      itemBuilder: (_, i) {
+                        final m = msgs[i];
+                        final mine = !m.fromBuyer;
+                        return Align(
+                          alignment: mine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: mine ? C.brandGradient : null,
+                              color: mine ? null : const Color(0xFFF1F3F9),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  m.text,
+                                  style: TextStyle(
+                                    color: mine ? Colors.white : C.ink,
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  dateTime(m.at),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: mine ? Colors.white70 : C.faint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _text,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _send(),
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message…',
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _sending ? null : _send,
+                      icon: const Icon(Icons.send_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

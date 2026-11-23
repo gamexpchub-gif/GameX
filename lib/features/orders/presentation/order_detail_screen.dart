@@ -9,6 +9,7 @@ import '../../../data/models/order.dart';
 import '../../cart/presentation/cart_screen.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
+import '../../trust/presentation/order_trust_section.dart';
 import 'orders_screen.dart';
 
 class OrderDetailScreen extends ConsumerWidget {
@@ -69,6 +70,7 @@ class OrderDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
+          if (order.hasSellerItems) OrderTrustSection(orderId: order.id),
           Card(
             child: ListTile(
               leading: const Icon(

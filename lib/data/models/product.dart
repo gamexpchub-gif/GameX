@@ -42,6 +42,13 @@ class Product {
     this.batteryHealth = 0,
     this.soldCount = 0,
     this.specs = const {},
+    this.sellerId,
+    this.sellerName,
+    this.sellerCity,
+    this.certificate,
+    this.checks = const {},
+    this.defects = const [],
+    this.returnDays = 7,
   });
 
   final String id;
@@ -81,6 +88,25 @@ class Product {
 
   /// Key specifications, e.g. {'Display': '6.1" OLED 120Hz'}.
   final Map<String, String> specs;
+
+  /// Marketplace seller (null for the built-in GAMEX catalogue).
+  final String? sellerId;
+  final String? sellerName;
+  final String? sellerCity;
+
+  /// GAMEX QC certificate number (e.g. GXC-48120-1000).
+  final String? certificate;
+
+  /// Seller function checks ({'Display & touch': true, ...}).
+  final Map<String, bool> checks;
+
+  /// Cosmetic defects marked on the photos by GAMEX QC.
+  final List<PhotoDefect> defects;
+
+  /// Days the buyer can return after delivery (0 = no returns).
+  final int returnDays;
+
+  bool get isMarketplace => sellerId != null;
 
   bool get inStock => stock > 0;
 
@@ -137,6 +163,13 @@ class Product {
     batteryHealth: batteryHealth ?? this.batteryHealth,
     soldCount: soldCount,
     specs: specs,
+    sellerId: sellerId,
+    sellerName: sellerName,
+    sellerCity: sellerCity,
+    certificate: certificate,
+    checks: checks,
+    defects: defects,
+    returnDays: returnDays,
   );
 
   int get discountPercent {
@@ -169,6 +202,16 @@ class Product {
     batteryHealth: json['batteryHealth'] as int? ?? 0,
     soldCount: json['soldCount'] as int? ?? 0,
     specs: Map<String, String>.from(json['specs'] as Map? ?? const {}),
+    sellerId: json['sellerId'] as String?,
+    sellerName: json['sellerName'] as String?,
+    sellerCity: json['sellerCity'] as String?,
+    certificate: json['certificate'] as String?,
+    checks: Map<String, bool>.from(json['checks'] as Map? ?? const {}),
+    defects: [
+      for (final d in (json['defects'] as List? ?? const []))
+        PhotoDefect.fromJson(d as Map<String, dynamic>),
+    ],
+    returnDays: (json['returnDays'] as num?)?.toInt() ?? 7,
   );
 
   Map<String, dynamic> toJson() => {
@@ -195,6 +238,13 @@ class Product {
     'batteryHealth': batteryHealth,
     'soldCount': soldCount,
     'specs': specs,
+    'sellerId': sellerId,
+    'sellerName': sellerName,
+    'sellerCity': sellerCity,
+    'certificate': certificate,
+    'checks': checks,
+    'defects': [for (final d in defects) d.toJson()],
+    'returnDays': returnDays,
   };
 }
 
@@ -248,4 +298,33 @@ class PromoBanner {
     image: json['image'] as String?,
     link: json['link'] as String?,
   );
+}
+
+/// A cosmetic defect marked on a listing photo (x/y are 0..1 of the image).
+class PhotoDefect {
+  const PhotoDefect({
+    required this.photo,
+    required this.x,
+    required this.y,
+    required this.label,
+  });
+
+  final int photo;
+  final double x;
+  final double y;
+  final String label;
+
+  factory PhotoDefect.fromJson(Map<String, dynamic> j) => PhotoDefect(
+    photo: (j['photo'] as num?)?.toInt() ?? 0,
+    x: (j['x'] as num).toDouble(),
+    y: (j['y'] as num).toDouble(),
+    label: j['label'] as String? ?? 'Defect',
+  );
+
+  Map<String, dynamic> toJson() => {
+    'photo': photo,
+    'x': x,
+    'y': y,
+    'label': label,
+  };
 }

@@ -688,7 +688,29 @@ class _LiveReviewPageState extends ConsumerState<_LiveReviewPage> {
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: Text('${r.status.label} • ID ${r.id}'),
-              trailing: r.active
+              trailing: r.productId.startsWith('GXL')
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Chat with seller',
+                          onPressed: () => context.push('/live-chat/${r.id}'),
+                          icon: const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            color: _blue,
+                          ),
+                        ),
+                        if (r.active)
+                          IconButton(
+                            tooltip: 'Cancel',
+                            onPressed: () => ref
+                                .read(liveRequestsProvider.notifier)
+                                .cancel(r.id),
+                            icon: const Icon(Icons.close_rounded, color: _red),
+                          ),
+                      ],
+                    )
+                  : r.active
                   ? TextButton(
                       onPressed: () =>
                           ref.read(liveRequestsProvider.notifier).cancel(r.id),

@@ -33,6 +33,57 @@ export interface Listing {
   rejectReason: string | null;
   certificate?: string;
   qc: { by: string; at: string; decision: string; notes?: string } | null;
+  defects?: Defect[];
+  returnDays?: number;
+}
+
+/** A marked cosmetic defect on a listing photo (x/y are 0..1). */
+export interface Defect {
+  photo: number;
+  x: number;
+  y: number;
+  label: string;
+}
+
+export interface FlowEvent {
+  l: string;
+  a: string;
+}
+
+export type ReturnStatus = 'requested' | 'pickup_scheduled' | 'picked_up' | 'refunded' | 'rejected';
+export interface ReturnRequest {
+  id: string;
+  reason: string;
+  details: string;
+  pickupSlot: string | null;
+  status: ReturnStatus;
+  refund: number;
+  note?: string;
+  at: string;
+  events: FlowEvent[];
+}
+
+export type ClaimStatus = 'submitted' | 'approved' | 'resolved' | 'rejected';
+export interface Claim {
+  id: string;
+  orderId: string;
+  listingId: string;
+  sellerId: string;
+  customerId: string | null;
+  item: string;
+  imei: string;
+  issue: string;
+  description: string;
+  status: ClaimStatus;
+  note: string;
+  at: string;
+  events: FlowEvent[];
+}
+
+export interface BlacklistEntry {
+  imei: string;
+  reason: string;
+  at: string;
 }
 
 export type OrderStage = 'newOrder' | 'accepted' | 'packed' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
@@ -59,6 +110,11 @@ export interface Order {
   awb: string | null;
   courier: string | null;
   cancelReason: string | null;
+  deliveredAt?: string | null;
+  returnDays?: number;
+  warrantyMonths?: number;
+  imei?: string;
+  returnRequest?: ReturnRequest | null;
 }
 
 export type SellerStatus = 'pending' | 'approved' | 'suspended';
@@ -184,6 +240,8 @@ export interface DB {
   settings: Settings;
   activity: Activity[];
   checklist: string[];
+  blacklist: BlacklistEntry[];
+  claims: Claim[];
 }
 
 const EMPTY: DB = {
@@ -198,6 +256,8 @@ const EMPTY: DB = {
   coupons: [],
   activity: [],
   checklist: [],
+  blacklist: [],
+  claims: [],
   settings: {
     storeName: 'GAMEX',
     supportPhone: '',

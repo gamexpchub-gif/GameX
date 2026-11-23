@@ -13,8 +13,11 @@ import {
   ShieldCheck,
   Store,
   XCircle,
+  Crosshair,
+  Ban,
+  Trash2,
 } from 'lucide-react';
-import { Listing, act, ago, fmtDateTime, gradeLabel, inr, title, useDB, validImei, media } from '../store';
+import { Defect, Listing, act, ago, fmtDateTime, gradeLabel, inr, title, useDB, validImei, media } from '../store';
 import { Badge, Button, Card, Drawer, Empty, PageHeader, SearchInput, Tabs, cx, inputCls, toast } from '../ui';
 import { listingLabel, listingTone, sellerLabel, sellerTone } from '../status';
 
@@ -43,6 +46,7 @@ export default function QcQueue() {
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [cert, setCert] = useState<Listing | null>(null);
+  const [showBlacklist, setShowBlacklist] = useState(false);
   const open = listings.find((l) => l.id === openId) ?? null;
   const sellerName = (id: string) => sellers.find((s) => s.id === id)?.storeName ?? id;
 
@@ -57,7 +61,15 @@ export default function QcQueue() {
 
   return (
     <>
-      <PageHeader title="QC Checking" subtitle="Every phone a seller lists is inspected here before it appears in the GAMEX app." />
+      <PageHeader
+        title="QC Checking"
+        subtitle="Every phone a seller lists is inspected here before it appears in the GAMEX app."
+        actions={
+          <Button variant="secondary" icon={Ban} onClick={() => setShowBlacklist(true)}>
+            IMEI Blacklist
+          </Button>
+        }
+      />
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ['Waiting for QC', lists.queue.length, 'from-amber-500 to-orange-500', Clock],
@@ -158,6 +170,7 @@ export default function QcQueue() {
       )}
 
       {open && <Inspection key={open.id} listing={open} onClose={() => setOpenId(null)} onCertified={(l) => setCert(l)} />}
+      {showBlacklist && <BlacklistDrawer onClose={() => setShowBlacklist(false)} />}
       {cert && <Certificate listing={cert} seller={sellerName(cert.sellerId)} onClose={() => setCert(null)} />}
     </>
   );
@@ -167,8 +180,11 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
   const listings = useDB((d) => d.listings);
   const sellers = useDB((d) => d.sellers);
   const sellerChecks = useDB((d) => d.checklist);
+  const blacklist = useDB((d) => d.blacklist);
   const seller = sellers.find((s) => s.id === l.sellerId);
   const [photo, setPhoto] = useState(0);
+  const [defects, setDefects] = useState<Defect[]>(l.defects ?? []);
+  const [marking, setMarking] = useState(false);
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -185,6 +201,7 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
 
   const auto = [
     { ok: validImei(l.imei), label: validImei(l.imei) ? 'IMEI passes checksum' : 'IMEI fails checksum', icon: Fingerprint },
+    { ok: !blacklist.some((b) => b.imei === l.imei), label: blacklist.some((b) => b.imei === l.imei) ? 'IMEI is on the BLACKLIST' : 'IMEI not on blacklist', icon: Ban },
     { ok: dup.length === 0, label: dup.length ? `IMEI also on ${dup.map((d) => d.id).join(', ')}` : 'IMEI not listed elsewhere', icon: Fingerprint },
     { ok: l.photos.length >= 2, label: `${l.photos.length} photo(s) uploaded`, icon: ImageOff },
     { ok: l.battery >= 80, label: `Battery health ${l.battery}%`, icon: Battery },
@@ -196,7 +213,7 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
     if (decision !== 'approve' && !reason.trim()) return toast('Pick or write a reason for the seller');
     setBusy(true);
     try {
-      const updated = await act<Listing>('POST', `/listings/${l.id}/qc`, { decision, reason, checks, inspector: 'Super Admin' });
+      const updated = await act<Listing>('POST', `/listings/${l.id}/qc`, { decision, reason, checks, defects, inspector: 'Super Admin' });
       toast(decision === 'approve' ? (seller?.status === 'approved' ? 'Approved — now live in the GAMEX app' : 'Approved — goes live once the seller passes KYC') : decision === 'changes' ? 'Changes requested — seller notified' : 'Rejected — seller notified');
       onClose();
       if (decision === 'approve') onCertified(updated);
@@ -230,8 +247,44 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
     >
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
-          <div className="grid h-72 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50">
-            {l.photos[photo] ? <img src={media(l.photos[photo])} alt="" className="h-full w-full object-contain p-4" /> : <ImageOff className="text-slate-300" size={40} />}
+          <div>
+            <DefectPhoto
+              src={l.photos[photo]}
+              photoIndex={photo}
+              defects={defects}
+              marking={marking}
+              onAdd={(d) => setDefects((x) => [...x, d])}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button size="sm" variant={marking ? 'primary' : 'secondary'} icon={Crosshair} onClick={() => setMarking((m) => !m)}>
+                {marking ? 'Click the photo to mark' : 'Mark defects'}
+              </Button>
+              {!pending && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => act('PATCH', `/listings/${l.id}`, { defects }).then(() => toast('Defect markers saved - buyers see them on the inspection report'))}
+                >
+                  Save markers
+                </Button>
+              )}
+              <span className="text-xs text-muted">{defects.length} marker(s) • shown to buyers</span>
+            </div>
+            {defects.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {defects.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-[10px] font-bold text-white">{i + 1}</span>
+                    <span className="flex-1">
+                      Photo {d.photo + 1}: {d.label}
+                    </span>
+                    <button onClick={() => setDefects((x) => x.filter((_, k) => k !== i))} className="font-bold hover:text-rose-900">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <p className="text-2xl font-extrabold text-ink">{inr(l.price)}</p>
@@ -403,5 +456,122 @@ export function Certificate({ listing: l, seller, onClose }: { listing: Listing;
         </div>
       </div>
     </div>
+  );
+}
+
+
+/** Photo with numbered defect markers; click to add one while marking. */
+function DefectPhoto({
+  src,
+  photoIndex,
+  defects,
+  marking,
+  onAdd,
+}: {
+  src?: string;
+  photoIndex: number;
+  defects: Defect[];
+  marking: boolean;
+  onAdd: (d: Defect) => void;
+}) {
+  const [aspect, setAspect] = useState(1);
+  if (!src) {
+    return (
+      <div className="grid h-72 place-items-center rounded-2xl bg-slate-50">
+        <ImageOff className="text-slate-300" size={40} />
+      </div>
+    );
+  }
+  return (
+    <div className="grid h-72 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50 p-4">
+      <div
+        className={cx('relative h-full max-w-full', marking && 'cursor-crosshair')}
+        style={{ aspectRatio: aspect }}
+        onClick={(e) => {
+          if (!marking) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          const x = (e.clientX - r.left) / r.width;
+          const y = (e.clientY - r.top) / r.height;
+          const label = window.prompt('Describe this defect (buyers will see it):', 'Light scratch');
+          if (label && label.trim()) onAdd({ photo: photoIndex, x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, label: label.trim().slice(0, 80) });
+        }}
+      >
+        <img
+          src={media(src)}
+          alt=""
+          className="h-full w-full object-contain"
+          onLoad={(e) => setAspect(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight || 1)}
+        />
+        {defects.map((d, i) =>
+          d.photo === photoIndex ? (
+            <span
+              key={i}
+              title={d.label}
+              className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-rose-500 text-[11px] font-bold text-white shadow-lg"
+              style={{ left: `${d.x * 100}%`, top: `${d.y * 100}%` }}
+            >
+              {i + 1}
+            </span>
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** IMEI blacklist manager (lost / stolen / financed devices). */
+export function BlacklistDrawer({ onClose }: { onClose: () => void }) {
+  const list = useDB((d) => d.blacklist);
+  const [imei, setImei] = useState('');
+  const [reason, setReason] = useState('Reported stolen');
+  const add = () =>
+    act<{ removedListings: number }>('POST', '/blacklist', { imei, reason })
+      .then((r) => {
+        toast(r.removedListings ? `Blacklisted - ${r.removedListings} live listing removed` : 'IMEI blacklisted');
+        setImei('');
+      })
+      .catch((e: Error) => toast(e.message));
+  return (
+    <Drawer open onClose={onClose} title="IMEI Blacklist">
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Blacklisted phones can't be listed, fail QC, and show as <b>blacklisted</b> in the customer app's IMEI checker. Listings with the IMEI are removed
+          immediately.
+        </p>
+        <div className="space-y-2 rounded-2xl border border-slate-200 p-4">
+          <input className={inputCls + ' font-mono'} value={imei} onChange={(e) => setImei(e.target.value.replace(/\D/g, '').slice(0, 15))} placeholder="15-digit IMEI" />
+          <select className={inputCls} value={reason} onChange={(e) => setReason(e.target.value)}>
+            {['Reported stolen', 'Reported lost by owner', 'Financed device - EMI unpaid', 'Fraud / chargeback', 'Blocked on CEIR'].map((r) => (
+              <option key={r}>{r}</option>
+            ))}
+          </select>
+          <Button className="w-full" icon={Ban} disabled={imei.length !== 15} onClick={add}>
+            Add to blacklist
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {list.map((b) => (
+            <div key={b.imei} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3">
+              <div className="grid h-9 w-9 place-items-center rounded-lg bg-rose-50 text-rose-600">
+                <Ban size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-sm font-bold">{b.imei}</p>
+                <p className="text-xs text-muted">
+                  {b.reason} • {ago(b.at)}
+                </p>
+              </div>
+              <button
+                title="Remove"
+                onClick={() => confirm(`Remove ${b.imei} from the blacklist?`) && act('DELETE', `/blacklist/${b.imei}`).then(() => toast('Removed'))}
+                className="rounded-lg p-2 text-muted hover:bg-slate-100"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Drawer>
   );
 }

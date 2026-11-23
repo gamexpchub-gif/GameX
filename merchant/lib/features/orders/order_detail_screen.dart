@@ -168,6 +168,53 @@ class OrderDetailScreen extends ConsumerWidget {
               ),
             ),
           ],
+          if (o.returnRequest != null) ...[
+            const SectionTitle('Return request'),
+            Panel(
+              color: C.amber.withValues(alpha: 0.07),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.assignment_return_rounded,
+                        color: C.amber,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          o.returnRequest!['reason'] as String? ?? 'Return',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Pill(
+                        (o.returnStatus ?? '').replaceAll('_', ' '),
+                        color: o.returnStatus == 'rejected'
+                            ? C.red
+                            : o.returnStatus == 'refunded'
+                            ? C.green
+                            : C.amber,
+                      ),
+                    ],
+                  ),
+                  if ((o.returnRequest!['details'] as String? ?? '')
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      o.returnRequest!['details'] as String,
+                      style: const TextStyle(color: C.muted),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  const Text(
+                    'GAMEX handles the pickup and checks the phone before any refund. You\'ll be notified of each step.',
+                    style: TextStyle(fontSize: 12.5, color: C.muted),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (o.cancelReason != null) ...[
             const SectionTitle('Cancellation'),
             Panel(
@@ -292,13 +339,7 @@ class OrderDetailScreen extends ConsumerWidget {
               Expanded(
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: C.green),
-                  onPressed: () {
-                    runAction(
-                      context,
-                      () => n.deliver(o.id),
-                      done: 'Marked delivered (courier confirmation)',
-                    );
-                  },
+                  onPressed: () => _deliver(context, ref, o),
                   icon: const Icon(Icons.done_all_rounded),
                   label: const Text('Delivered'),
                 ),
@@ -308,6 +349,65 @@ class OrderDetailScreen extends ConsumerWidget {
         ),
         _ => null,
       },
+    );
+  }
+
+  /// Open-box delivery: the buyer checks the phone, then shares the OTP.
+  Future<void> _deliver(
+    BuildContext context,
+    WidgetRef ref,
+    SellerOrder o,
+  ) async {
+    final c = TextEditingController();
+    final otp = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Open-box delivery'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Let the buyer open the box and check the phone (IMEI, screen, cameras). Then ask for the 4-digit OTP shown in their GAMEX app.',
+              style: TextStyle(color: C.muted, height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: c,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              textAlign: TextAlign.center,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(
+                fontSize: 26,
+                letterSpacing: 12,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: const InputDecoration(
+                counterText: '',
+                hintText: '••••',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, c.text),
+            child: const Text('Verify & deliver'),
+          ),
+        ],
+      ),
+    );
+    if (otp == null || otp.length != 4 || !context.mounted) return;
+    await runAction(
+      context,
+      () => ref.read(syncProvider.notifier).deliver(o.id, otp),
+      done: 'Delivered • OTP verified',
     );
   }
 

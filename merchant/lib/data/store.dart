@@ -288,7 +288,13 @@ class SyncNotifier extends Notifier<SellerData> {
     'ship',
     {'courier': courier, 'pickupAt': pickup.toIso8601String()},
   );
-  Future<void> deliver(String id) => orderAction(id, 'deliver');
+
+  /// Open-box delivery: needs the 4-digit OTP from the buyer's app.
+  Future<void> deliver(String id, String otp) =>
+      orderAction(id, 'deliver', {'otp': otp});
+
+  Future<void> sendLiveMessage(String id, String text) =>
+      _do((sid) => _api.post('/seller/$sid/live/$id/messages', {'text': text}));
 
   // ----- Live reviews -----
 

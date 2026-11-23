@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../trust/presentation/product_trust_card.dart';
+
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_image.dart';
 import '../../../../core/widgets/common.dart';
@@ -132,6 +134,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
       children: [
         _conditionCard(),
         _gap,
+        if (p.isMarketplace) ...[ProductTrustCard(product: p), _gap],
         _liveCard(),
         _gap,
         _deliverTo(),

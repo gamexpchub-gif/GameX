@@ -18,6 +18,14 @@ import '../../features/reviews/presentation/reviews_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
 import '../../features/splash/presentation/splash_screen.dart';
+import '../../features/trust/presentation/certificate_screen.dart';
+import '../../features/trust/presentation/imei_check_screen.dart';
+import '../../features/trust/presentation/inspection_report_screen.dart';
+import '../../features/trust/presentation/live_chat_screen.dart';
+import '../../features/trust/presentation/scan_certificate_screen.dart';
+import '../../features/trust/presentation/seller_profile_screen.dart';
+import '../../features/trust/presentation/trust_hub_screen.dart';
+import '../../features/trust/presentation/warranty_card_screen.dart';
 import '../../features/wishlist/presentation/wishlist_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -82,6 +90,40 @@ final appRouter = GoRouter(
           ProductDetailScreen(productId: s.pathParameters['id']!),
     ),
     GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
+    GoRoute(path: '/trust', builder: (_, _) => const TrustHubScreen()),
+    GoRoute(
+      path: '/trust/scan',
+      builder: (_, _) => const ScanCertificateScreen(),
+    ),
+    GoRoute(
+      path: '/trust/imei',
+      builder: (_, s) =>
+          ImeiCheckScreen(initial: s.uri.queryParameters['imei']),
+    ),
+    GoRoute(
+      path: '/certificate/:code',
+      builder: (_, s) => CertificateScreen(code: s.pathParameters['code']!),
+    ),
+    GoRoute(
+      path: '/product/:id/report',
+      builder: (_, s) =>
+          InspectionReportScreen(productId: s.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/seller/:id',
+      builder: (_, s) => SellerProfileScreen(sellerId: s.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/warranty/:orderId/:itemId',
+      builder: (_, s) => WarrantyCardScreen(
+        orderId: s.pathParameters['orderId']!,
+        itemId: s.pathParameters['itemId']!,
+      ),
+    ),
+    GoRoute(
+      path: '/live-chat/:id',
+      builder: (_, s) => LiveChatScreen(liveId: s.pathParameters['id']!),
+    ),
     GoRoute(
       path: '/live-review/:id',
       builder: (_, s) => LiveReviewScreen(productId: s.pathParameters['id']!),

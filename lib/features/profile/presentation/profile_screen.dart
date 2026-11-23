@@ -1206,6 +1206,12 @@ class _SettingsCard extends ConsumerWidget {
       d: d,
       rows: [
         (
+          Icons.verified_user_outlined,
+          'GAMEX Trust Center',
+          'Certificate scan, IMEI check, warranty & returns',
+          () => context.push('/trust'),
+        ),
+        (
           Icons.person_outline_rounded,
           'Account Settings',
           'Profile, email, phone and security',

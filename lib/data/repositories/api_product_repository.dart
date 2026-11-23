@@ -45,6 +45,9 @@ class ApiProductRepository implements ProductRepository {
     return path;
   }
 
+  /// Converts a server listing into a [Product] (used by seller profiles).
+  Product productFromJson(Map<String, dynamic> j) => _toProduct(j);
+
   Product _toProduct(Map<String, dynamic> j) {
     final brand = j['brand'] as String;
     final model = j['model'] as String;
@@ -84,6 +87,16 @@ class ApiProductRepository implements ProductRepository {
       ram: j['ram'] as String?,
       batteryHealth: (j['battery'] as num?)?.toInt() ?? 0,
       soldCount: (j['sold'] as num?)?.toInt() ?? 0,
+      sellerId: seller?['id'] as String?,
+      sellerName: seller?['storeName'] as String?,
+      sellerCity: seller?['city'] as String?,
+      certificate: j['certificate'] as String?,
+      checks: Map<String, bool>.from(j['checks'] as Map? ?? const {}),
+      defects: [
+        for (final d in (j['defects'] as List? ?? const []))
+          PhotoDefect.fromJson(d as Map<String, dynamic>),
+      ],
+      returnDays: (j['returnDays'] as num?)?.toInt() ?? 7,
       specs: {
         'Sold by':
             '${seller?['storeName'] ?? 'GAMEX Seller'}, ${seller?['city'] ?? ''}',

@@ -497,7 +497,12 @@ class QaCard extends StatelessWidget {
 
 // ───────────────────────────── Condition report ─────────────────────────────
 
-void showConditionReport(BuildContext context, Product p) {
+/// Opens the full 32-point inspection report.
+void showConditionReport(BuildContext context, Product p) =>
+    context.push('/product/${p.id}/report');
+
+/// Quick condition summary sheet (kept for small entry points).
+void showConditionSummary(BuildContext context, Product p) {
   final battery = p.batteryHealth == 0 ? 90 : p.batteryHealth;
   final grade = (p.condition ?? 'Excellent').replaceAll(' Condition', '');
   final scores = {

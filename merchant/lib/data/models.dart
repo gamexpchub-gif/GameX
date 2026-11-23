@@ -298,6 +298,7 @@ class SellerOrder {
     this.pickupAt,
     this.imeiVerified = false,
     this.cancelReason,
+    this.returnRequest,
   });
 
   final String id;
@@ -320,6 +321,10 @@ class SellerOrder {
   final DateTime? pickupAt;
   final bool imeiVerified;
   final String? cancelReason;
+
+  /// Buyer's return request ({status, reason, details, pickupSlot}) or null.
+  final Map<String, dynamic>? returnRequest;
+  String? get returnStatus => returnRequest?['status'] as String?;
 
   /// New orders must be accepted within 4 hours; packing within 24.
   DateTime get slaDeadline => stage == OrderStage.newOrder
@@ -357,6 +362,7 @@ class SellerOrder {
     pickupAt: pickupAt ?? this.pickupAt,
     imeiVerified: imeiVerified ?? this.imeiVerified,
     cancelReason: cancelReason ?? this.cancelReason,
+    returnRequest: returnRequest,
   );
 
   Map<String, Object?> toJson() => {
@@ -380,6 +386,7 @@ class SellerOrder {
     'pickupAt': pickupAt?.toIso8601String(),
     'imeiVerified': imeiVerified,
     'cancelReason': cancelReason,
+    'returnRequest': returnRequest,
   };
 
   factory SellerOrder.fromJson(Map<String, dynamic> j) => SellerOrder(
@@ -407,6 +414,7 @@ class SellerOrder {
         : DateTime.parse(j['pickupAt'] as String),
     imeiVerified: j['imeiVerified'] as bool? ?? false,
     cancelReason: j['cancelReason'] as String?,
+    returnRequest: (j['returnRequest'] as Map?)?.cast<String, dynamic>(),
   );
 }
 
@@ -433,6 +441,7 @@ class LiveCall {
     required this.notes,
     required this.stage,
     this.converted,
+    this.messages = const [],
   });
 
   final String id;
@@ -440,6 +449,8 @@ class LiveCall {
   final String item;
   final String photo;
   final String buyer;
+  final List<ChatMessage> messages;
+  int get unread => messages.where((m) => m.fromBuyer && !m.seen).length;
   final String mode;
   final String language;
   final DateTime slot;
@@ -460,6 +471,7 @@ class LiveCall {
         notes: notes,
         stage: stage ?? this.stage,
         converted: converted ?? this.converted,
+        messages: messages,
       );
 
   Map<String, Object?> toJson() => {
@@ -474,6 +486,7 @@ class LiveCall {
     'notes': notes,
     'stage': stage.name,
     'converted': converted,
+    'messages': messages.map((m) => m.toJson()).toList(),
   };
 
   factory LiveCall.fromJson(Map<String, dynamic> j) => LiveCall(
@@ -488,6 +501,36 @@ class LiveCall {
     notes: j['notes'] as String,
     stage: LiveStage.values.byName(j['stage'] as String),
     converted: j['converted'] as bool?,
+    messages: [
+      for (final m in (j['messages'] as List? ?? const []))
+        ChatMessage.fromJson(m as Map<String, dynamic>),
+    ],
+  );
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.fromBuyer,
+    required this.text,
+    required this.at,
+    this.seen = false,
+  });
+  final bool fromBuyer;
+  final String text;
+  final DateTime at;
+  final bool seen;
+
+  Map<String, Object?> toJson() => {
+    'from': fromBuyer ? 'buyer' : 'seller',
+    'text': text,
+    'at': at.toIso8601String(),
+    'seen': seen,
+  };
+  factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
+    fromBuyer: j['from'] == 'buyer',
+    text: j['text'] as String? ?? '',
+    at: DateTime.parse(j['at'] as String),
+    seen: j['seen'] == true,
   );
 }
 

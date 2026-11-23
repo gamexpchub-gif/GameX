@@ -36,6 +36,11 @@ export function imeiFrom(body14) {
   return body14 + ((10 - (sum % 10)) % 10);
 }
 
+/** "Apple iPhone 15", "Xiaomi 14" (no doubled brand). */
+export function titleOf(l) {
+  return l.model.toLowerCase().startsWith(l.brand.toLowerCase()) ? l.model : `${l.brand} ${l.model}`;
+}
+
 export function buildSeed() {
   let seed = 11;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -103,6 +108,15 @@ export function buildSeed() {
         status === 'inReview' || status === 'draft'
           ? null
           : { by: 'Priya (QC Mumbai)', at: ago(i, 2), decision: status === 'rejected' ? 'rejected' : 'approved', notes: '' },
+      certificate: ['active', 'soldOut', 'paused'].includes(status) ? `GXC-${48120 + i * 7}-${1000 + ((i * 7919) % 9000)}` : undefined,
+      approvedAt: ['active', 'soldOut', 'paused'].includes(status) ? ago(i, 2) : undefined,
+      returnDays: 7,
+      defects:
+        i === 2
+          ? [{ photo: 0, x: 0.62, y: 0.22, label: 'Tiny scratch near camera' }, { photo: 0, x: 0.35, y: 0.78, label: 'Light scuff on frame' }]
+          : grade === 'good'
+            ? [{ photo: 0, x: 0.5, y: 0.85, label: 'Light signs of use on edge' }]
+            : [],
     };
   });
 
@@ -163,7 +177,7 @@ export function buildSeed() {
       sellerId: l.sellerId,
       customerId: c.id,
       listingId: l.id,
-      item: `${l.brand} ${l.model}`,
+      item: titleOf(l),
       variant: `${l.ram} / ${l.storage} • ${l.color}`,
       photo: l.photos[0],
       price: l.price,
@@ -181,6 +195,13 @@ export function buildSeed() {
       pickupAt: null,
       imeiVerified: shipped || stage === 'packed',
       cancelReason: stage === 'cancelled' ? 'Buyer changed mind' : null,
+      otp: String(1000 + ((i * 3571) % 9000)),
+      deliveredAt: reached('delivered') && stage !== 'cancelled' && stage !== 'newOrder' ? at(2 * DAY) : null,
+      returnDays: l.returnDays ?? 7,
+      warrantyMonths: l.warranty,
+      imei: l.imei,
+      certificate: l.certificate ?? null,
+      returnRequest: null,
     };
   });
 
@@ -197,7 +218,7 @@ export function buildSeed() {
       id: `LV${700100 + i * 37}`,
       sellerId: l.sellerId,
       listingId: l.id,
-      item: `${l.brand} ${l.model}`,
+      item: titleOf(l),
       photo: l.photos[0],
       buyer,
       phone: `+91 98${String(76543210 + i * 1379).slice(0, 8)}`,
@@ -231,9 +252,17 @@ export function buildSeed() {
     { id: 'N3', sellerId: 'S1001', title: 'Listing approved', body: 'Your Apple iPhone 15 passed QC and is now live.', kind: 'qc', at: ago(1, 3), read: [] },
   ];
 
+  const blacklist = [
+    { imei: imeiFrom('35693803564380'), reason: 'Reported stolen (FIR filed)', at: ago(20) },
+    { imei: imeiFrom('86123405678901'), reason: 'Reported lost by owner', at: ago(9) },
+    { imei: imeiFrom('35412309876543'), reason: 'Financed device - EMI unpaid', at: ago(4) },
+  ];
+
   return {
     sellers,
     listings,
+    blacklist,
+    claims: [],
     customers,
     orders,
     live,

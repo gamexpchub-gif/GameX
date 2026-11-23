@@ -10,7 +10,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Add photos and videos to your product reviews.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Take photos or record a short video for your review.</string>
+	<string>Scan GAMEX certificate QR codes and take photos or videos for your reviews.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record audio with your review video.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
