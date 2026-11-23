@@ -8,6 +8,10 @@ import '../../features/catalog/presentation/categories_screen.dart';
 import '../../features/catalog/presentation/category_products_screen.dart';
 import '../../features/checkout/presentation/checkout_screen.dart';
 import '../../features/checkout/presentation/order_success_screen.dart';
+import '../../features/discover/data/phone_filter.dart';
+import '../../features/discover/presentation/compare_screen.dart';
+import '../../features/discover/presentation/explore_screen.dart';
+import '../../features/discover/presentation/finder_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/live_review/presentation/live_review_screen.dart';
 import '../../features/orders/presentation/order_detail_screen.dart';
@@ -90,6 +94,16 @@ final appRouter = GoRouter(
           ProductDetailScreen(productId: s.pathParameters['id']!),
     ),
     GoRoute(path: '/search', builder: (_, _) => const SearchScreen()),
+    GoRoute(
+      path: '/explore',
+      builder: (_, s) => ExploreScreen(
+        initial: s.extra is PhoneFilter
+            ? s.extra! as PhoneFilter
+            : parseSmartQuery(s.uri.queryParameters['q'] ?? ''),
+      ),
+    ),
+    GoRoute(path: '/compare', builder: (_, _) => const CompareScreen()),
+    GoRoute(path: '/finder', builder: (_, _) => const FinderScreen()),
     GoRoute(path: '/trust', builder: (_, _) => const TrustHubScreen()),
     GoRoute(
       path: '/trust/scan',

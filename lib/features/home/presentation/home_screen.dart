@@ -9,6 +9,7 @@ import '../../../core/widgets/skeleton.dart';
 import '../../../data/models/product.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../discover/presentation/widgets/home_discover.dart';
 import '../../wishlist/providers/wishlist_provider.dart';
 import 'widgets/design_scale.dart';
 import 'widgets/hero_banner.dart';
@@ -85,10 +86,7 @@ class HomeScreen extends ConsumerWidget {
                   SliverToBoxAdapter(child: SizedBox(height: 16 * k)),
                   SliverToBoxAdapter(
                     child: HomeSearchBar(
-                      onScan: () => showAppSnack(
-                        context,
-                        'IMEI / QR scanner coming soon',
-                      ),
+                      onScan: () => context.push('/trust/scan'),
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -123,7 +121,13 @@ class HomeScreen extends ConsumerWidget {
                       onEmi: () => showEmiSheet(context),
                     ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 35 * k)),
+                  SliverToBoxAdapter(child: SizedBox(height: 28 * k)),
+                  const SliverToBoxAdapter(child: DiscoverToolsCard()),
+                  SliverToBoxAdapter(child: SizedBox(height: 30 * k)),
+                  const SliverToBoxAdapter(child: ForYouRail()),
+                  SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
+                  const SliverToBoxAdapter(child: RecentlyViewedRail()),
+                  SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(
                       title: 'Popular Brands',

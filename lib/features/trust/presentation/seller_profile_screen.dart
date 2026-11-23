@@ -206,9 +206,7 @@ class _Profile extends StatelessWidget {
             ],
           ),
         ),
-        TTitle(
-          'Phones from this seller (${s.listings.length})',
-        ),
+        TTitle('Phones from this seller (${s.listings.length})'),
         if (s.listings.isEmpty)
           const TCard(
             child: Center(

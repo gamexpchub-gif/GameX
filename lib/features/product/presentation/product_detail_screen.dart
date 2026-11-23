@@ -15,6 +15,9 @@ import '../../../data/models/review.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../discover/presentation/widgets/fair_price_meter.dart';
+import '../../discover/presentation/widgets/pdp_discover_actions.dart';
+import '../../discover/providers/discover_providers.dart';
 import '../../home/presentation/widgets/design_scale.dart' show HomeColors;
 import '../../home/presentation/widgets/home_sheets.dart';
 import '../../reviews/providers/reviews_provider.dart';
@@ -165,6 +168,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   void initState() {
     super.initState();
     _storage = _baseStorage;
+    Future.microtask(() => ref.read(recentlyViewedProvider.notifier).record(p));
   }
 
   @override
@@ -221,6 +225,19 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                 SliverToBoxAdapter(child: _titleBlock(d)),
                 SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
                 SliverToBoxAdapter(child: _priceCard(d)),
+                SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 19 * d),
+                    child: Column(
+                      children: [
+                        FairPriceMeter(product: p, price: _price),
+                        const SizedBox(height: 10),
+                        PdpDiscoverActions(product: p),
+                      ],
+                    ),
+                  ),
+                ),
                 SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
                 SliverToBoxAdapter(child: _emiCard(d)),
                 SliverToBoxAdapter(child: SizedBox(height: 26 * d)),

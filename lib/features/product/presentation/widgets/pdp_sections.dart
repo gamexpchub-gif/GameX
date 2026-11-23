@@ -3,8 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../trust/presentation/product_trust_card.dart';
-
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_image.dart';
 import '../../../../core/widgets/common.dart';
@@ -16,10 +14,14 @@ import '../../../cart/providers/cart_provider.dart';
 import '../../../catalog/providers/catalog_providers.dart';
 import '../../../checkout/presentation/widgets/address_sheets.dart';
 import '../../../checkout/providers/address_provider.dart';
+import '../../../discover/data/pincode.dart';
+import '../../../discover/presentation/widgets/delivery_check_card.dart';
+import '../../../discover/providers/discover_providers.dart';
 import '../../../home/presentation/widgets/design_scale.dart' show HomeColors;
 import '../../../home/presentation/widgets/home_sheets.dart';
-import '../../../reviews/providers/reviews_provider.dart';
 import '../../../live_review/providers/live_review_provider.dart';
+import '../../../reviews/providers/reviews_provider.dart';
+import '../../../trust/presentation/product_trust_card.dart';
 import 'pdp_sheets.dart';
 import 'review_widgets.dart';
 
@@ -140,6 +142,11 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         _deliverTo(),
         SizedBox(height: 14 * d),
         _freeDelivery(),
+        SizedBox(height: 14 * d),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 19 * d),
+          child: DeliveryCheckCard(product: p, price: widget.price),
+        ),
         _gap,
         _certified(),
         _gap,
@@ -502,9 +509,12 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
 
   Widget _freeDelivery() {
     final city = ref.watch(addressBookProvider).current?.city ?? 'Mumbai';
-    final eta = DateTime.now().add(
-      Duration(days: kMetroCities.contains(city) ? 2 : 4),
-    );
+    final pin = lookupPin(ref.watch(deliveryPinProvider) ?? '');
+    final eta = pin != null
+        ? quoteFor(p, pin, price: widget.price).latest
+        : DateTime.now().add(
+            Duration(days: kMetroCities.contains(city) ? 2 : 4),
+          );
     final free = widget.price >= CartSummary.freeDeliveryThreshold;
     return _card(
       padding: EdgeInsets.symmetric(horizontal: 28 * d, vertical: 20 * d),
