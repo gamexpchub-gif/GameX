@@ -7,11 +7,18 @@ import 'product_repository.dart';
 /// followed by the built-in catalogue. Falls back to the built-in catalogue
 /// whenever the server can't be reached.
 class ApiProductRepository implements ProductRepository {
-  ApiProductRepository(this._api, [ProductRepository? fallback])
-    : _mock = fallback ?? MockProductRepository();
+  ApiProductRepository(
+    this._api, [
+    ProductRepository? fallback,
+    this.includeDemo = true,
+  ]) : _mock = fallback ?? MockProductRepository();
 
   final Api _api;
   final ProductRepository _mock;
+
+  /// Mix in the built-in demo catalogue (switched off from the admin panel
+  /// once real seller stock is live).
+  final bool includeDemo;
 
   List<Product>? _cache;
   DateTime _cachedAt = DateTime(2000);
@@ -200,7 +207,10 @@ class ApiProductRepository implements ProductRepository {
   }) async {
     final results = await Future.wait([
       _server(),
-      _mock.products(categoryId: categoryId, query: query, sort: sort),
+      if (includeDemo)
+        _mock.products(categoryId: categoryId, query: query, sort: sort)
+      else
+        Future.value(const <Product>[]),
     ]);
     final server = results[0].where((p) => _matches(p, categoryId, query));
     final all = [...server, ...results[1]];
@@ -238,6 +248,7 @@ class ApiProductRepository implements ProductRepository {
     required int page,
     int pageSize = 12,
   }) async {
+    if (!includeDemo) return page == 0 ? _server() : const [];
     final mock = await _mock.newListings(page: page, pageSize: pageSize);
     if (page != 0) return mock;
     final server = await _server();

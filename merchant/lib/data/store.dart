@@ -20,16 +20,29 @@ class SellerNotifier extends Notifier<Seller?> {
   LocalStore get _s => ref.read(localStoreProvider);
 
   @override
-  Seller? build() =>
-      _s.readJson(_kSeller, (j) => Seller.fromJson(j as Map<String, dynamic>));
+  Seller? build() {
+    // Session ended on the server (expired / signed in elsewhere).
+    Api.onUnauthorized = () {
+      if (state != null) signOut();
+    };
+    // Older installs have no session token: ask them to sign in again.
+    if (ref.read(apiProvider).token == null) return null;
+    return _s.readJson(
+      _kSeller,
+      (j) => Seller.fromJson(j as Map<String, dynamic>),
+    );
+  }
 
-  Future<void> set(Seller seller) async {
+  /// Saves the seller; [token] is the new session from sign-in.
+  Future<void> set(Seller seller, {String? token}) async {
+    if (token != null) await ref.read(apiProvider).setToken(token);
     state = seller;
     await _s.writeJson(_kSeller, seller.toJson());
   }
 
   Future<void> signOut() async {
     state = null;
+    await ref.read(apiProvider).setToken(null);
     await _s.remove(_kSeller);
     await _s.remove(_kCache);
   }
@@ -39,37 +52,65 @@ final sellerProvider = NotifierProvider<SellerNotifier, Seller?>(
   SellerNotifier.new,
 );
 
+/// The number is verified but has no store yet.
+class NotRegistered implements Exception {
+  const NotRegistered(this.verifyToken);
+  final String verifyToken;
+}
+
 /// Sign-in helpers (before a session exists).
 class AuthApi {
   AuthApi(this._api);
   final Api _api;
 
-  /// Returns the seller for [phone], or null when not registered yet.
-  Future<Seller?> login(String phone) async {
+  /// SMS mode of the server: msg91 | twilio | dev | off (off = demo 123456).
+  Future<String> otpMode() async {
     try {
-      final j = await _api.post('/seller/login', {'phone': phone});
-      return Seller.fromJson(j as Map<String, dynamic>);
+      final j = await _api.get('/config') as Map;
+      return j['otp'] as String? ?? 'off';
+    } catch (_) {
+      return 'off';
+    }
+  }
+
+  /// Sends the SMS code. Returns the code only in server test mode.
+  Future<String?> sendOtp(String phone) async {
+    final j = await _api.post('/auth/otp/send', {'phone': phone}) as Map;
+    return j['devCode'] as String?;
+  }
+
+  /// Verifies [code] and returns the seller with a session token.
+  /// Throws [NotRegistered] for a verified number without a store.
+  Future<(Seller, String)> login(String phone, String code) async {
+    try {
+      final j = await _api.post('/seller/login', {
+        'phone': phone,
+        'code': code,
+      }) as Map<String, dynamic>;
+      return (Seller.fromJson(j), j['token'] as String);
     } on ApiException catch (e) {
-      if (e.status == 404) return null;
+      if (e.status == 404 && e.verifyToken != null) {
+        throw NotRegistered(e.verifyToken!);
+      }
       rethrow;
     }
   }
 
-  Future<Seller> register({
-    required String phone,
+  Future<(Seller, String)> register({
+    required String verifyToken,
     required String ownerName,
     required String storeName,
     required String city,
     String gstin = '',
   }) async {
     final j = await _api.post('/seller/register', {
-      'phone': phone,
+      'verifyToken': verifyToken,
       'ownerName': ownerName,
       'storeName': storeName,
       'city': city,
       'gstin': gstin,
-    });
-    return Seller.fromJson(j as Map<String, dynamic>);
+    }) as Map<String, dynamic>;
+    return (Seller.fromJson(j), j['token'] as String);
   }
 }
 

@@ -131,9 +131,11 @@ void main() {
       overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
     );
     await c.read(apiProvider).setBaseUrl(url!);
-    final seller = await c.read(authApiProvider).login('9876543210');
-    expect(seller!.storeName, 'Mobile Point Andheri');
-    await c.read(sellerProvider.notifier).set(seller);
+    final (seller, token) = await c
+        .read(authApiProvider)
+        .login('9876543210', '123456');
+    expect(seller.storeName, 'Mobile Point Andheri');
+    await c.read(sellerProvider.notifier).set(seller, token: token);
     c.read(syncProvider);
     await c.read(syncProvider.notifier).refresh();
     final data = c.read(syncProvider);

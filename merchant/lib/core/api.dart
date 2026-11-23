@@ -9,9 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'storage.dart';
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.status = 0});
+  const ApiException(this.message, {this.status = 0, this.verifyToken});
   final String message;
   final int status;
+
+  /// Seller sign-in: proof that the number was verified (404 Not registered).
+  final String? verifyToken;
   bool get offline => status == 0;
   @override
   String toString() => message;
@@ -30,6 +33,21 @@ class Api {
   Api(this._prefs);
   final SharedPreferences _prefs;
   final _client = http.Client();
+
+  /// Session token sent as `Authorization: Bearer`.
+  static const tokenKey = 'seller_token_v1';
+
+  /// Called when the server says the session is no longer valid.
+  static void Function()? onUnauthorized;
+
+  String? get token => _prefs.getString(tokenKey);
+  Future<void> setToken(String? t) =>
+      t == null ? _prefs.remove(tokenKey) : _prefs.setString(tokenKey, t);
+
+  Map<String, String> get _auth {
+    final t = token;
+    return t == null ? const {} : {'authorization': 'Bearer $t'};
+  }
 
   String get baseUrl => _prefs.getString(_kApiKey) ?? kDefaultApi;
   Future<void> setBaseUrl(String url) {
@@ -63,18 +81,27 @@ class Api {
     final body = res.body.isEmpty
         ? null
         : jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode == 401 && token != null) onUnauthorized?.call();
     if (res.statusCode >= 400) {
       final msg = body is Map && body['error'] is String
           ? body['error'] as String
           : 'Request failed (${res.statusCode})';
-      throw ApiException(msg, status: res.statusCode);
+      throw ApiException(
+        msg,
+        status: res.statusCode,
+        verifyToken: body is Map ? body['verifyToken'] as String? : null,
+      );
     }
     return body;
   }
 
-  static const _json = {'content-type': 'application/json'};
+  Map<String, String> get _json => {
+    'content-type': 'application/json',
+    ..._auth,
+  };
 
-  Future<dynamic> get(String p) => _send(() => _client.get(_u(p)));
+  Future<dynamic> get(String p) =>
+      _send(() => _client.get(_u(p), headers: _auth));
   Future<dynamic> post(String p, [Object? body]) => _send(
     () => _client.post(_u(p), headers: _json, body: jsonEncode(body ?? {})),
   );
@@ -82,12 +109,14 @@ class Api {
       _send(() => _client.put(_u(p), headers: _json, body: jsonEncode(body)));
   Future<dynamic> patch(String p, Object body) =>
       _send(() => _client.patch(_u(p), headers: _json, body: jsonEncode(body)));
-  Future<dynamic> delete(String p) => _send(() => _client.delete(_u(p)));
+  Future<dynamic> delete(String p) =>
+      _send(() => _client.delete(_u(p), headers: _auth));
 
   /// Uploads a local image and returns its server path.
   Future<String> upload(String filePath) async {
     final res = await _send(() async {
       final req = http.MultipartRequest('POST', _u('/upload'))
+        ..headers.addAll(_auth)
         ..files.add(await http.MultipartFile.fromPath('photo', filePath));
       return http.Response.fromStream(await _client.send(req));
     });

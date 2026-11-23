@@ -234,7 +234,7 @@ export function mountService(ctx) {
   }
 
   api.get('/orders/:orderId/tracking', async (req, res) => {
-    const list = D().orders.filter((o) => o.orderId === req.params.orderId);
+    const list = D().orders.filter((o) => o.orderId === req.params.orderId && o.customerId === req.customer?.id);
     if (!list.length) return bad(res, 404, 'Order not found');
     res.json(await Promise.all(list.map(trackOne)));
   });

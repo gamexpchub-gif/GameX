@@ -8,9 +8,10 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import multer from 'multer';
+import { mountAuth } from './auth.js';
 import { mountGrowth } from './growth.js';
 import { mountService } from './service.js';
-import { mountLaunch } from './launch.js';
+import { mountLaunch, otpProvider } from './launch.js';
 import { CHECKLIST, buildSeed, imeiFrom, titleOf } from './seed.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,9 +58,11 @@ function migrate() {
   growth?.migrate();
   service?.migrate();
   launch?.migrate();
+  auth?.migrate();
 }
 /** Growth features (offers, wallet, trade-in, alerts). Set up below. */
 let growth;
+let auth;
 let service;
 let launch;
 migrate();
@@ -114,6 +117,19 @@ site.use('/api', api);
 app.use(ADMIN_BASE, site);
 app.use(site);
 const bad = (res, code, msg) => res.status(code).json({ error: msg });
+
+// Customer login & the guard that binds every customer request to its session.
+auth = mountAuth({
+  api,
+  D: () => db,
+  save,
+  now,
+  uid,
+  find,
+  bad,
+  log,
+  codeFor: (id) => 'GX' + crypto.createHash('sha1').update(String(id)).digest('hex').slice(0, 6).toUpperCase(),
+});
 
 api.get('/health', (_, res) => res.json({ ok: true, time: now(), listings: db.listings.length }));
 
@@ -331,7 +347,7 @@ api.get('/orders/status', (req, res) => {
   const ids = String(req.query.ids || '').split(',').filter(Boolean);
   res.json(
     db.orders
-      .filter((o) => ids.includes(o.orderId))
+      .filter((o) => ids.includes(o.orderId) && o.customerId === req.customer.id)
       .map((o) => {
         const s = find('sellers', o.sellerId);
         return {
@@ -534,31 +550,66 @@ api.post('/live/:id/messages', (req, res) => {
 // ======================================================
 const normPhone = (p) => '+91 ' + String(p || '').replace(/\D/g, '').slice(-10);
 
+// Seller sign-in: phone → SMS code (via /auth/otp/send) → session token.
+// Without an SMS provider the demo code 123456 is accepted.
+const sellerSession = (s) => {
+  const token = crypto.randomBytes(24).toString('base64url');
+  db.sellerSessions ??= [];
+  db.sellerSessions.unshift({ token: crypto.createHash('sha256').update(token).digest('hex'), sellerId: s.id, at: now() });
+  db.sellerSessions = db.sellerSessions.slice(0, 5000);
+  return token;
+};
+const verifiedPhones = new Map(); // token -> { phone, exp }
+
 api.post('/seller/login', (req, res) => {
   const phone = normPhone(req.body?.phone);
+  const p10 = phone.slice(-10);
+  if (!/^[6-9]\d{9}$/.test(p10)) return bad(res, 400, 'Enter a valid 10-digit mobile number');
+  const code = String(req.body?.code || '');
+  if (otpProvider() === 'off') {
+    if (code !== '123456') return bad(res, 400, 'Incorrect code. Demo code is 123456.');
+  } else {
+    const err = launch.checkOtp(p10, code);
+    if (err) return bad(res, err[0], err[1]);
+  }
   const s = db.sellers.find((x) => normPhone(x.phone) === phone);
-  if (!s) return bad(res, 404, 'Not registered');
-  res.json(s);
+  if (!s) {
+    // Verified number without a store: allow registration for 15 minutes.
+    const vt = crypto.randomBytes(18).toString('base64url');
+    verifiedPhones.set(vt, { phone, exp: Date.now() + 15 * 6e4 });
+    return res.status(404).json({ error: 'Not registered', verifyToken: vt });
+  }
+  const token = sellerSession(s);
+  save();
+  res.json({ ...s, token });
 });
 
 api.post('/seller/register', (req, res) => {
-  const { phone, ownerName, storeName, city, gstin = '' } = req.body || {};
-  if (!phone || !ownerName || !storeName || !city) return bad(res, 400, 'Missing details');
-  const p = normPhone(phone);
+  const { verifyToken, ownerName, storeName, city, gstin = '' } = req.body || {};
+  const v = verifiedPhones.get(String(verifyToken || ''));
+  if (!v || v.exp < Date.now()) return bad(res, 401, 'Please verify your mobile number again');
+  if (!ownerName || !storeName || !city) return bad(res, 400, 'Missing details');
+  verifiedPhones.delete(String(verifyToken));
+  const p = v.phone;
   let s = db.sellers.find((x) => normPhone(x.phone) === p);
   if (!s) {
     s = { id: uid('S'), phone: p, ownerName, storeName, city, gstin, bank: 'Bank not linked', status: 'pending', online: true, rating: 0, createdAt: now() };
     db.sellers.push(s);
     log(`${storeName} applied to sell (KYC pending)`, 'seller');
     notify(s.id, 'Welcome to GAMEX Seller 👋', 'Your KYC is under review. You can start adding listings now — they go live once your account is approved.', 'info');
-    save();
   }
-  res.json(s);
+  const token = sellerSession(s);
+  save();
+  res.json({ ...s, token });
 });
 
 function sellerGuard(req, res, next) {
   const s = find('sellers', req.params.sid);
   if (!s) return bad(res, 404, 'Seller not found');
+  const h = String(req.headers.authorization || '');
+  const t = h.startsWith('Bearer ') ? crypto.createHash('sha256').update(h.slice(7).trim()).digest('hex') : '';
+  const ok = t && (db.sellerSessions || []).some((x) => x.token === t && x.sellerId === s.id);
+  if (!ok) return bad(res, 401, 'Session expired. Please sign in again.');
   req.seller = s;
   next();
 }

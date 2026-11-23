@@ -2,7 +2,7 @@ abstract final class Validators {
   static final _emailRe = RegExp(r'^[\w.+-]+@[\w-]+\.[\w.-]+$');
 
   /// Indian mobile number: 10 digits starting 6-9 (optional +91 / 0 prefix).
-  static final _bdPhoneRe = RegExp(r'^(?:\+?91|0)?[6-9]\d{9}$');
+  static final _phoneRe = RegExp(r'^(?:\+?91|0)?[6-9]\d{9}$');
 
   static String? required(String? v, [String field = 'This field']) =>
       (v == null || v.trim().isEmpty) ? '$field is required' : null;
@@ -14,13 +14,13 @@ abstract final class Validators {
 
   static String? password(String? v) {
     if (v == null || v.isEmpty) return 'Password is required';
-    return v.length < 6 ? 'At least 6 characters' : null;
+    return v.length < 8 ? 'At least 8 characters' : null;
   }
 
   static String? phone(String? v) {
     if (v == null || v.trim().isEmpty) return 'Phone number is required';
     final cleaned = v.replaceAll(RegExp(r'[\s-]'), '');
-    return _bdPhoneRe.hasMatch(cleaned)
+    return _phoneRe.hasMatch(cleaned)
         ? null
         : 'Enter a valid 10-digit mobile number';
   }

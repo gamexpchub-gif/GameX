@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/app_config.dart';
 import '../../../core/storage.dart';
 import '../../../data/mock/mock_data.dart';
 import '../../../data/models/product.dart';
@@ -14,7 +15,11 @@ final discoverPoolProvider = FutureProvider<List<Product>>((ref) async {
   final all = await ref.watch(allProductsProvider.future);
   final seen = <String>{};
   return [
-    for (final p in [...all, for (var n = 0; n < 48; n++) MockData.listing(n)])
+    for (final p in [
+      ...all,
+      if (ref.watch(appConfigProvider).asData?.value.demoCatalog ?? true)
+        for (var n = 0; n < 48; n++) MockData.listing(n),
+    ])
       if (seen.add(p.id)) p,
   ];
 });

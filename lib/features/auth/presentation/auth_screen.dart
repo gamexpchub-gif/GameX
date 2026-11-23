@@ -987,61 +987,49 @@ class _OtpButton extends ConsumerWidget {
   }
 }
 
-void _showForgot(BuildContext context, WidgetRef ref, String prefill) {
-  final c = TextEditingController(text: prefill);
-  showModalBottomSheet<void>(
+/// Forgot password: verify the number with an SMS code, then choose a new
+/// password.
+Future<void> _showForgot(
+  BuildContext context,
+  WidgetRef ref,
+  String prefill,
+) async {
+  final cfg = ref.read(appConfigProvider).asData?.value;
+  if (cfg == null || !cfg.otpLogin) {
+    showAppSnack(context, 'Password reset needs SMS. Contact support@gamex.in');
+    return;
+  }
+  if (!await showOtpLogin(context) || !context.mounted) return;
+  final c = TextEditingController();
+  final pw = await showDialog<String>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (sheet) => Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        24 + MediaQuery.viewInsetsOf(sheet).bottom,
+    builder: (d) => AlertDialog(
+      title: const Text('Set a new password'),
+      content: TextField(
+        controller: c,
+        obscureText: true,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'At least 8 characters'),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Reset password',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Enter your mobile number or email. We\'ll send you a one-time code.',
-            style: TextStyle(color: _muted),
-          ),
-          const SizedBox(height: 16),
-          _Field(
-            controller: c,
-            icon: Icons.phone_outlined,
-            hint: 'Mobile number or email',
-            keyboard: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 18),
-          _GradientButton(
-            icon: Icons.sms_outlined,
-            label: 'Send OTP',
-            onTap: () async {
-              final v = c.text.trim();
-              final err = v.contains('@')
-                  ? Validators.email(v)
-                  : Validators.phone(v);
-              if (err != null) {
-                showAppSnack(sheet, err);
-                return;
-              }
-              await ref.read(authProvider.notifier).requestPasswordReset(v);
-              if (sheet.mounted) Navigator.pop(sheet);
-              if (context.mounted) showAppSnack(context, 'OTP sent to $v');
-            },
-          ),
-        ],
-      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(d),
+          child: const Text('Later'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(d, c.text),
+          child: const Text('Save'),
+        ),
+      ],
     ),
   );
+  if (pw == null || pw.isEmpty) return;
+  try {
+    await ref.read(authProvider.notifier).setPassword(pw);
+    if (context.mounted) showAppSnack(context, 'Password updated');
+  } on AuthException catch (e) {
+    if (context.mounted) showAppSnack(context, e.message);
+  }
 }
 
 // ───────────────────────────── Register ─────────────────────────────

@@ -17,6 +17,9 @@ class AppConfig {
   bool get push => j['push'] == true;
   bool get courier => j['courier'] == true;
 
+  /// Show the built-in GAMEX demo catalogue next to real seller listings.
+  bool get demoCatalog => j['demoCatalog'] != false;
+
   Map get _cod => j['cod'] as Map? ?? const {};
   bool get codEnabled => _cod['enabled'] != false;
   double get codNewLimit =>

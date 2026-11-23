@@ -63,6 +63,7 @@ export function mountLaunch(ctx) {
     db.settings.codLimitNew ??= 15000;
     db.settings.codMaxOpen ??= 2;
     db.settings.codEnabled ??= true;
+    db.settings.demoCatalog ??= true;
   }
   migrate();
 
@@ -74,6 +75,7 @@ export function mountLaunch(ctx) {
       razorpayKey: paymentsLive() ? env('RAZORPAY_KEY_ID') : null,
       push: !!env('FCM_SERVICE_ACCOUNT'),
       courier: !!(env('SHIPROCKET_EMAIL') && env('SHIPROCKET_PASSWORD')),
+      demoCatalog: D().settings.demoCatalog !== false,
       cod: { enabled: D().settings.codEnabled !== false, newAccountLimit: D().settings.codLimitNew, maxOpen: D().settings.codMaxOpen },
     }),
   );
@@ -106,19 +108,29 @@ export function mountLaunch(ctx) {
     res.json({ sent: true, provider: otpProvider(), ...(otpProvider() === 'dev' ? { devCode: code } : {}) });
   });
 
-  api.post('/auth/otp/verify', (req, res) => {
-    const phone = digits(req.body?.phone);
-    const code = String(req.body?.code || '');
+  /**
+   * Checks (and uses up) an SMS code. Returns [status, error] on failure or
+   * null when the code is right.
+   */
+  function checkOtp(phone, code) {
     const db = D();
     const o = db.otps.find((x) => x.phone === phone);
-    if (!o || Date.now() - Date.parse(o.at) > 5 * MIN) return bad(res, 400, 'Code expired. Ask for a new one.');
-    if (o.tries >= 5) return bad(res, 429, 'Too many wrong codes. Ask for a new one.');
-    if (o.code !== hash(`${phone}:${code}`)) {
+    if (!o || Date.now() - Date.parse(o.at) > 5 * MIN) return [400, 'Code expired. Ask for a new one.'];
+    if (o.tries >= 5) return [429, 'Too many wrong codes. Ask for a new one.'];
+    if (o.code !== hash(`${phone}:${String(code)}`)) {
       o.tries++;
       save();
-      return bad(res, 400, 'Wrong code. Check the SMS and try again.');
+      return [400, 'Wrong code. Check the SMS and try again.'];
     }
     db.otps = db.otps.filter((x) => x.phone !== phone);
+    return null;
+  }
+
+  api.post('/auth/otp/verify', (req, res) => {
+    const phone = digits(req.body?.phone);
+    const err = checkOtp(phone, req.body?.code || '');
+    if (err) return bad(res, err[0], err[1]);
+    const db = D();
     const id = `C${hash(`gamex:${phone}`).slice(0, 10).toUpperCase()}`;
     let c = find('customers', id) || db.customers.find((x) => digits(x.phone) === phone);
     const isNew = !c;
@@ -205,7 +217,8 @@ export function mountLaunch(ctx) {
 
   admin.put('/launch-settings', (req, res) => {
     const s = D().settings;
-    const { codLimitNew, codMaxOpen, codEnabled } = req.body || {};
+    const { codLimitNew, codMaxOpen, codEnabled, demoCatalog } = req.body || {};
+    if (demoCatalog !== undefined) s.demoCatalog = !!demoCatalog;
     if (codLimitNew !== undefined) s.codLimitNew = Math.max(0, Number(codLimitNew));
     if (codMaxOpen !== undefined) s.codMaxOpen = Math.max(1, Number(codMaxOpen));
     if (codEnabled !== undefined) s.codEnabled = !!codEnabled;
@@ -311,5 +324,5 @@ button{background:#3b5bff;color:#fff;border:0;font-weight:700}</style></head><bo
   };
   site.get('/.well-known/assetlinks.json', assetlinks);
 
-  return { migrate, checkCod, assetlinks };
+  return { migrate, checkCod, assetlinks, checkOtp };
 }

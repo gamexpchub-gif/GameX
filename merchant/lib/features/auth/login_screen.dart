@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/api.dart';
 import '../../core/server_sheet.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -34,6 +35,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   final _phone = TextEditingController();
   final _otp = TextEditingController();
+  String _mode = 'off';
+  String? _devCode;
+  String? _verifyToken;
   final _store = TextEditingController();
   final _owner = TextEditingController();
   final _gst = TextEditingController();
@@ -55,8 +59,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         return setState(() => _error = 'Enter a valid 10-digit mobile number');
       }
     } else if (_step == 1) {
-      if (_otp.text != '123456') {
-        return setState(() => _error = 'Incorrect OTP. Use 123456 for demo.');
+      if (_otp.text.length != 6) {
+        return setState(() => _error = 'Enter the 6-digit code');
       }
     } else {
       if (_store.text.trim().length < 3) {
@@ -79,28 +83,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.read(authApiProvider);
     try {
       if (_step == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+        _mode = await auth.otpMode();
+        _devCode = _mode == 'off' ? null : await auth.sendOtp(_phone.text);
       } else if (_step == 1) {
-        final existing = await auth.login(_phone.text);
-        if (existing != null) {
-          await ref.read(sellerProvider.notifier).set(existing);
+        try {
+          final (seller, token) = await auth.login(_phone.text, _otp.text);
+          await ref.read(sellerProvider.notifier).set(seller, token: token);
           return;
+        } on NotRegistered catch (e) {
+          _verifyToken = e.verifyToken;
         }
       } else {
-        final s = await auth.register(
-          phone: _phone.text,
+        final (s, token) = await auth.register(
+          verifyToken: _verifyToken ?? '',
           ownerName: _owner.text.trim(),
           storeName: _store.text.trim(),
           city: _city,
           gstin: _gst.text.trim().toUpperCase(),
         );
-        await ref.read(sellerProvider.notifier).set(s);
+        await ref.read(sellerProvider.notifier).set(s, token: token);
         return;
       }
-    } catch (e) {
+    } on ApiException catch (e) {
       if (mounted) {
-        setState(() => _error = '$e. Tap ⚙ to set the server address.');
+        setState(
+          () => _error = e.offline
+              ? '$e. Tap ⚙ to set the server address.'
+              : e.message,
+        );
       }
+      return;
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
       return;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -285,13 +299,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           color: C.primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.info_outline_rounded, color: C.primary, size: 18),
-            SizedBox(width: 8),
+            const Icon(Icons.info_outline_rounded, color: C.primary, size: 18),
+            const SizedBox(width: 8),
             Text(
-              'Demo OTP: 123456',
-              style: TextStyle(color: C.primary, fontWeight: FontWeight.w700),
+              _mode == 'off'
+                  ? 'Demo mode: use code 123456'
+                  : _devCode != null
+                  ? 'Test mode: your code is $_devCode'
+                  : 'Code sent by SMS. It expires in 5 minutes.',
+              style: const TextStyle(
+                color: C.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),

@@ -117,7 +117,7 @@ type Cfg = { otp: string; payments: string; push: boolean; courier: boolean; cod
 
 /** Live-service status (keys live in /etc/gamex.env on the server) + COD fraud limits. */
 function LaunchCard() {
-  const settings = useDB((d) => d.settings) as unknown as { codLimitNew?: number; codMaxOpen?: number };
+  const settings = useDB((d) => d.settings) as unknown as { codLimitNew?: number; codMaxOpen?: number; demoCatalog?: boolean };
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const deletions = useDB((d) => d.deletionRequests ?? []);
   const [limit, setLimit] = useState(settings.codLimitNew ?? 15000);
@@ -149,6 +149,20 @@ function LaunchCard() {
           </div>
         ))}
         {!cfg && <p className="text-sm text-muted">Loading…</p>}
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-slate-100 p-4">
+        <div>
+          <p className="font-semibold text-ink">GAMEX demo catalogue</p>
+          <p className="text-sm text-muted">Sample phones shown next to real seller listings. Turn off before launch so buyers only see real stock.</p>
+        </div>
+        <Toggle
+          checked={settings.demoCatalog !== false}
+          onChange={(v) =>
+            act('PUT', '/launch-settings', { demoCatalog: v })
+              .then(() => toast(v ? 'Demo catalogue shown in the app' : 'Demo catalogue hidden - only real listings'))
+              .catch((e: Error) => toast(e.message))
+          }
+        />
       </div>
       <div className="mt-5 flex flex-wrap items-end gap-4 rounded-xl bg-amber-50 p-4">
         <ShieldAlert className="text-amber-600" size={22} />
