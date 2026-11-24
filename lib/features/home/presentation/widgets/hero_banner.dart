@@ -1,12 +1,14 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../data/models/product.dart';
 import 'design_scale.dart';
+import 'promo_cards.dart';
 
-/// Swipeable hero carousel. No timers or looping animations (smooth on
-/// low-end Android). Each page is 417 design-px tall: the card starts 25 px
+/// Swipeable hero carousel that slides on its own every few seconds (paused
+/// while the buyer touches it or the home tab is off screen). Each page is 417 design-px tall: the card starts 25 px
 /// down and the artwork overflows 5 px above the page, exactly like the
 /// mockup where the phone pokes out of the card.
 class HeroBannerCarousel extends StatefulWidget {
@@ -20,9 +22,36 @@ class HeroBannerCarousel extends StatefulWidget {
 class _HeroBannerCarouselState extends State<HeroBannerCarousel> {
   final _page = PageController();
   final _index = ValueNotifier<int>(0);
+  Timer? _timer;
+  bool _touching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _advance());
+  }
+
+  void _advance() {
+    final n = widget.banners.length;
+    if (n < 2 || _touching || !_page.hasClients || !mounted) return;
+    // Only while this page is actually visible (not under another route).
+    if (!TickerMode.getValuesNotifier(context).value.enabled) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    final next = (_index.value + 1) % n;
+    if (next == 0) {
+      _page.jumpToPage(0);
+    } else {
+      _page.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _page.dispose();
     _index.dispose();
     super.dispose();
@@ -35,13 +64,18 @@ class _HeroBannerCarouselState extends State<HeroBannerCarousel> {
       children: [
         SizedBox(
           height: 417 * k,
-          child: PageView.builder(
+          child: Listener(
+            onPointerDown: (_) => _touching = true,
+            onPointerUp: (_) => _touching = false,
+            onPointerCancel: (_) => _touching = false,
+            child: PageView.builder(
             controller: _page,
             clipBehavior: Clip.none,
             itemCount: widget.banners.length,
             onPageChanged: (i) => _index.value = i,
             itemBuilder: (_, i) =>
                 RepaintBoundary(child: _HeroPage(banner: widget.banners[i])),
+            ),
           ),
         ),
         SizedBox(height: 18 * k),
@@ -115,7 +149,7 @@ class _HeroPage extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: banner.link == null ? null : () => context.push(banner.link!),
+      onTap: banner.link == null ? null : () => openBannerLink(context, banner.link!),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 35 * k),
         child: Stack(

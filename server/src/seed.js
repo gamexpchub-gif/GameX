@@ -6,6 +6,13 @@ const HOUR = 36e5;
 const ago = (d = 0, h = 0, m = 0) => new Date(Date.now() - d * DAY - h * HOUR - m * 6e4).toISOString();
 const ahead = (d = 0, h = 0) => new Date(Date.now() + d * DAY + h * HOUR).toISOString();
 
+/** Home-screen promo cards (below the deals), editable in Admin → Banners. */
+export const PROMO_BANNERS = [
+  { id: 'pb1', placement: 'promo', title: 'Exchange your old phone', subtitle: 'Instant quote • Free doorstep pickup • Extra bonus', image: '', cta: 'Get price', link: '/trade-in', color: '#6D28D9', active: true, order: 101 },
+  { id: 'pb2', placement: 'promo', title: 'Sell your phone to GAMEX', subtitle: 'Best price in 60 seconds • Money same day', image: '', cta: 'Sell now', link: '/sell', color: '#0F766E', active: true, order: 102 },
+  { id: 'pb3', placement: 'promo', title: 'Screen broken? Fix it at home', subtitle: 'Genuine parts • 6 month repair warranty', image: '', cta: 'Book repair', link: '/repair', color: '#C2410C', active: true, order: 103 },
+];
+
 export const CHECKLIST = [
   'Display & touch',
   'Face ID / Fingerprint',
@@ -273,7 +280,7 @@ export function buildSeed() {
       { id: 'b2', title: 'iPhone Fest — Up to 45% Off', subtitle: 'Certified • 6M Warranty • Free Delivery', image: '/img/hero_banner_violet.png', cta: 'Shop iPhones', link: '/category/apple', active: true, order: 2 },
       { id: 'b3', title: 'Exchange & Save More', subtitle: 'Best Value • Instant Quote • Doorstep', image: '/img/hero_banner_teal.png', cta: 'Check Value', link: '/categories', active: true, order: 3 },
       { id: 'b4', title: 'Flash Sale Friday', subtitle: 'Extra ₹2,000 Off • UPI • Today Only', image: '/img/hero_banner_magenta.png', cta: 'Grab Deals', link: '/categories', active: true, order: 4 },
-    ],
+    ].map((b) => ({ ...b, placement: 'hero' })),
     coupons: [
       { id: 'cp1', code: 'GAMEX10', type: 'percent', value: 10, minOrder: 20000, maxDiscount: 3000, uses: 412, limit: 1000, expiresAt: ahead(20), active: true },
       { id: 'cp2', code: 'UPI500', type: 'flat', value: 500, minOrder: 10000, maxDiscount: 500, uses: 1290, limit: 5000, expiresAt: ahead(45), active: true },

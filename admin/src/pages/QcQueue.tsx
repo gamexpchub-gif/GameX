@@ -142,7 +142,7 @@ export default function QcQueue() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge tone="blue">{gradeLabel[l.grade]}</Badge>
-                    <Badge tone={l.battery >= 85 ? 'green' : 'amber'}>Battery {l.battery}%</Badge>
+                    {l.battery != null && <Badge tone={l.battery >= 85 ? 'green' : 'amber'}>Battery {l.battery}%</Badge>}
                     <Badge tone={validImei(l.imei) && !dup ? 'green' : 'red'}>{!validImei(l.imei) ? 'IMEI invalid' : dup ? 'IMEI duplicate' : 'IMEI valid'}</Badge>
                     {s && s.status !== 'approved' && <Badge tone={sellerTone[s.status]}>Seller {sellerLabel[s.status]}</Badge>}
                   </div>
@@ -204,7 +204,7 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
     { ok: !blacklist.some((b) => b.imei === l.imei), label: blacklist.some((b) => b.imei === l.imei) ? 'IMEI is on the BLACKLIST' : 'IMEI not on blacklist', icon: Ban },
     { ok: dup.length === 0, label: dup.length ? `IMEI also on ${dup.map((d) => d.id).join(', ')}` : 'IMEI not listed elsewhere', icon: Fingerprint },
     { ok: l.photos.length >= 2, label: `${l.photos.length} photo(s) uploaded`, icon: ImageOff },
-    { ok: l.battery >= 80, label: `Battery health ${l.battery}%`, icon: Battery },
+    ...(l.battery != null ? [{ ok: l.battery >= 80, label: `Battery health ${l.battery}%`, icon: Battery }] : []),
     { ok: !market || Math.abs(priceDiff) <= 15, label: market ? `Price ${priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(0)}% vs market ${inr(market)}` : 'No market comparison yet', icon: AlertTriangle },
     { ok: seller?.status === 'approved', label: seller ? `Seller ${sellerLabel[seller.status]}` : 'Unknown seller', icon: Store },
   ];
@@ -332,6 +332,49 @@ function Inspection({ listing: l, onClose, onCertified }: { listing: Listing; on
             ))}
             <p className="mt-2 text-xs text-muted">In the box: {l.accessories?.length ? l.accessories.join(', ') : 'Phone only'}</p>
             {l.notes && <p className="mt-1 text-xs text-muted">Seller note: “{l.notes}”</p>}
+            {!!l.variants?.length && (
+              <div className="mt-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted">Variants ({l.variants.length + 1} options)</p>
+                <div className="mt-1 space-y-1 text-xs">
+                  <p>
+                    <b>Main:</b> {l.ram} / {l.storage} • {l.color} — {inr(l.price)} • {l.stock} pcs
+                  </p>
+                  {l.variants.map((v) => (
+                    <p key={v.id}>
+                      {v.ram ? `${v.ram} / ` : ''}
+                      {v.storage} • {v.color} — {inr(v.price)}
+                      {v.mrp > v.price ? ` (MRP ${inr(v.mrp)})` : ''} • {v.stock} pcs
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!!l.highlights?.length && (
+              <div className="mt-3 flex gap-2 overflow-x-auto">
+                {l.highlights.map((h, i) => (
+                  <div key={i} className="w-28 shrink-0">
+                    <img src={media(h.image)} alt="" className="h-20 w-28 rounded-lg object-cover" />
+                    <p className="mt-1 truncate text-[11px] font-semibold">{h.title}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!!l.specs?.length && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer font-bold text-muted">Specifications ({l.specs.length})</summary>
+                <table className="mt-1 w-full">
+                  <tbody>
+                    {l.specs.map((r, i) => (
+                      <tr key={i} className="border-t border-slate-100">
+                        <td className="py-1 pr-2 text-muted">{r.group}</td>
+                        <td className="py-1 pr-2">{r.k}</td>
+                        <td className="py-1 font-semibold">{r.v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
           </div>
           <div className="rounded-2xl border border-slate-200 p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Seller</p>
@@ -425,7 +468,7 @@ export function Certificate({ listing: l, seller, onClose }: { listing: Listing;
                 <span className="text-muted">Grade • Battery</span>
                 <br />
                 <b>
-                  {gradeLabel[l.grade]} • {l.battery}%
+                  {gradeLabel[l.grade]}{l.battery != null ? ` • ${l.battery}%` : ''}
                 </b>
               </p>
             </div>
@@ -446,7 +489,7 @@ export function Certificate({ listing: l, seller, onClose }: { listing: Listing;
               if (!w) return;
               w.document.write(`<html><head><title>${l.certificate}</title></head><body style="font-family:Inter,Arial;padding:24px">
                 <h2 style="margin:0">GAMEX • QC Passed</h2><p>${title(l)} — ${l.ram} / ${l.storage} • ${l.color}</p>
-                <img src="${qr}" width="220"/><p><b>${l.certificate}</b><br/>IMEI ${l.imei}<br/>${gradeLabel[l.grade]} • Battery ${l.battery}%</p>
+                <img src="${qr}" width="220"/><p><b>${l.certificate}</b><br/>IMEI ${l.imei}<br/>${gradeLabel[l.grade]}${l.battery != null ? ` • Battery ${l.battery}%` : ''}</p>
                 <script>window.onload=()=>window.print()</script></body></html>`);
               w.document.close();
             }}

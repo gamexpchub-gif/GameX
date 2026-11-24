@@ -8,19 +8,11 @@ import '../../core/format.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/store.dart';
+import '../../data/catalog.dart';
+import 'widgets/category_picker.dart';
+import 'widgets/listing_extras.dart';
 import 'widgets/listing_ui.dart';
 
-const _brands = [
-  'Apple',
-  'Samsung',
-  'Google',
-  'OnePlus',
-  'vivo',
-  'Xiaomi',
-  'Realme',
-  'Nothing',
-  'Motorola',
-];
 const _rams = ['4GB', '6GB', '8GB', '12GB', '16GB', '24GB'];
 const _storages = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
 const _accessories = ['Box', 'Charger', 'Cable', 'Bill', 'Case'];
@@ -30,11 +22,6 @@ const _sims = [
   'Dual SIM (Nano + eSIM)',
   'Single SIM (Nano)',
   'eSIM only',
-];
-const _devices = [
-  ('Mobile Phone', Icons.smartphone_rounded),
-  ('Tablet', Icons.tablet_android_rounded),
-  ('Smartwatch', Icons.watch_rounded),
 ];
 const _maxPhotos = 20;
 const _samples = [
@@ -106,7 +93,6 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
   bool _extrasOpen = true;
   late Listing _l;
   late final bool _isNew;
-  late final List<String> _brandList;
   late final TextEditingController _model,
       _imei,
       _price,
@@ -141,9 +127,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
           photos: const [],
           status: ListingStatus.draft,
           createdAt: DateTime.now(),
-          checks: {for (final c in kChecklist) c: false},
+          checks: const {},
         );
-    _brandList = [..._brands, if (!_brands.contains(_l.brand)) _l.brand];
     final knownColour = kColours.any((c) => c.$1 == _l.color);
     _model = TextEditingController(text: _l.model);
     _imei = TextEditingController(text: _l.imei);
@@ -179,14 +164,15 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
       case 0:
         if (l.photos.isEmpty) return 'Add at least one photo';
       case 1:
-        if (l.model.length < 2) return 'Enter the model name';
+        if (l.model.length < 2) return 'Choose or type the model';
         if (l.color.isEmpty) return 'Choose the colour';
-        if (!validImei(l.imei)) {
+        if (_hasImei && !validImei(l.imei)) {
           return 'Enter a valid 15-digit IMEI (dial *#06#)';
         }
       case 2:
-        if (l.checks.values.any((v) => !v)) {
-          return 'Confirm all detailed checks';
+        final items = inspectionItems(l.deviceType, l.brand);
+        if (!items.any((i) => l.checks[i] == true)) {
+          return 'Tick the checks that work on this device';
         }
       case 3:
         if (l.price < 1000) return 'Enter your selling price';
@@ -700,6 +686,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
           ],
         ),
       ),
+      const SizedBox(height: 12),
+      HighlightsCard(listing: _current, onChanged: _apply),
     ];
   }
 
@@ -792,6 +780,158 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
 
   // ================================================================ DETAILS
 
+  ProductCategory get _cat => categoryOf(_l.deviceType);
+  bool get _hasImei => _cat.hasImei;
+  bool get _showBattery => showsBatteryHealth(_l.brand, _l.deviceType);
+
+  /// Keeps text fields in sync when a section edits the listing.
+  void _apply(Listing l) => setState(
+    () => _l = l.copyWith(
+      model: _l.model,
+      imei: _l.imei,
+      price: _l.price,
+      mrp: _l.mrp,
+      notes: _l.notes,
+    ),
+  );
+
+  Future<void> _pickCategory() async {
+    final h = await showCategoryPicker(
+      context,
+      category: _model.text.isEmpty ? null : _cat,
+      brand: _model.text.isEmpty ? null : _l.brand,
+    );
+    if (h == null || !mounted) return;
+    HapticFeedback.selectionClick();
+    final changedCat = h.category.name != _l.deviceType;
+    setState(() {
+      if (h.model != null) _model.text = h.model!;
+      _l = _l.copyWith(
+        deviceType: h.category.name,
+        brand: h.brand,
+        // a new category has a different checklist
+        checks: changedCat ? {} : null,
+        specs: changedCat ? const [] : null,
+      );
+    });
+    if (h.model == null) {
+      snack(context, 'Now type the ${h.brand} model name');
+    }
+  }
+
+  Widget _categoryCard() {
+    final picked = _model.text.trim().isNotEmpty;
+    final c = _cat;
+    return LxCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const LxSection(
+            icon: Icons.category_outlined,
+            title: 'Category & Model',
+            required: true,
+            subtitle: 'Search your product — category and brand fill in',
+          ),
+          GestureDetector(
+            onTap: _pickCategory,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: LX.violet.withValues(alpha: 0.35)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.search_rounded, color: LX.violet),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Search e.g. iPhone 13, Galaxy S23, AirPods',
+                      style: TextStyle(color: LX.muted),
+                    ),
+                  ),
+                  Icon(Icons.tune_rounded, color: LX.muted, size: 20),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F2FF),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                BrandBadge(_l.brand, size: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [c.plural, _l.brand].join('  ›  '),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: LX.violet,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        picked ? _model.text.trim() : 'Choose your model',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: picked ? LX.ink : LX.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _pickCategory,
+                  child: Text(picked ? 'Change' : 'Browse'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Model name shown to buyers',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: LX.muted,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _Field(
+                  controller: _model,
+                  hint: 'e.g. iPhone 15 Pro Max',
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _autoFill(announce: false),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _SmallAction(
+                icon: Icons.auto_awesome_outlined,
+                label: 'Auto\nDetect',
+                onTap: _autoFill,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   void _autoFill({bool announce = true}) {
     final m = _model.text.toLowerCase().trim();
     if (m.isEmpty) {
@@ -800,6 +940,28 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
         'Type the model first, e.g. iPhone 13',
         icon: Icons.info_outline_rounded,
       );
+    }
+    final hits = searchCatalog(m, limit: 1);
+    if (hits.isNotEmpty) {
+      final h = hits.first;
+      String? ram;
+      for (final e in _known.entries) {
+        if (m.contains(e.key)) ram = e.value.$2;
+      }
+      setState(
+        () => _l = _l.copyWith(
+          deviceType: h.category.name,
+          brand: h.brand,
+          ram: ram,
+        ),
+      );
+      if (announce) {
+        snack(
+          context,
+          'Detected ${h.category.plural} › ${h.brand}${ram == null ? '' : ' • $ram RAM'}',
+        );
+      }
+      return;
     }
     String? brand;
     String? ram;
@@ -833,37 +995,6 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
             : 'Detected $brand • $ram RAM — check storage & colour',
       );
     }
-  }
-
-  Future<void> _addBrand() async {
-    final c = TextEditingController();
-    final b = await showDialog<String>(
-      context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('Add brand'),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(hintText: 'e.g. iQOO'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, c.text.trim()),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-    if (b == null || b.isEmpty) return;
-    setState(() {
-      if (!_brandList.contains(b)) _brandList.add(b);
-      _l = _l.copyWith(brand: b);
-    });
   }
 
   Future<void> _scanImei() async {
@@ -953,116 +1084,7 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
         ],
       ),
       const SizedBox(height: 12),
-      LxCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const LxSection(
-              icon: Icons.phone_iphone_rounded,
-              title: 'Device Type',
-              required: true,
-            ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final d in _devices)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: LxPill(
-                        label: d.$1,
-                        selected: _l.deviceType == d.$1,
-                        leading: Icon(
-                          d.$2,
-                          size: 18,
-                          color: _l.deviceType == d.$1 ? Colors.white : LX.ink,
-                        ),
-                        onTap: () =>
-                            setState(() => _l = _l.copyWith(deviceType: d.$1)),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 12),
-      LxCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LxSection(
-              icon: Icons.sell_outlined,
-              title: 'Brand',
-              required: true,
-              trailing: GestureDetector(
-                onTap: _addBrand,
-                child: const Row(
-                  children: [
-                    Icon(Icons.add_rounded, color: LX.violet, size: 20),
-                    Text(
-                      'Add Brand',
-                      style: TextStyle(
-                        color: LX.violet,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 2.7,
-              children: [
-                for (final b in _brandList)
-                  _BrandTile(
-                    brand: b,
-                    selected: _l.brand == b,
-                    onTap: () => setState(() => _l = _l.copyWith(brand: b)),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 12),
-      LxCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const LxSection(
-              icon: Icons.layers_outlined,
-              title: 'Model',
-              required: true,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: _Field(
-                    controller: _model,
-                    hint: 'e.g. iPhone 15 Pro Max',
-                    suffix: const Icon(Icons.search_rounded, color: LX.muted),
-                    onSubmitted: (_) => _autoFill(announce: false),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _SmallAction(
-                  icon: Icons.document_scanner_outlined,
-                  label: 'Detect\nBrand',
-                  onTap: _autoFill,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      _categoryCard(),
       const SizedBox(height: 12),
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1141,24 +1163,29 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const LxSection(
+            LxSection(
               icon: Icons.qr_code_2_rounded,
-              title: 'IMEI Number',
-              required: true,
+              title: _hasImei ? 'IMEI Number' : 'Serial Number',
+              required: _hasImei,
+              optional: !_hasImei,
             ),
             Row(
               children: [
                 Expanded(
                   child: _Field(
                     controller: _imei,
-                    hint: 'Enter IMEI (15 digits)',
-                    keyboard: TextInputType.number,
+                    hint: _hasImei
+                        ? 'Enter IMEI (15 digits)'
+                        : 'Serial number from Settings / box',
+                    keyboard: _hasImei
+                        ? TextInputType.number
+                        : TextInputType.text,
                     formatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(15),
+                      if (_hasImei) FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(_hasImei ? 15 : 24),
                     ],
                     onChanged: (_) => setState(() {}),
-                    suffix: _imei.text.length == 15
+                    suffix: _hasImei && _imei.text.length == 15
                         ? Icon(
                             imeiOk
                                 ? Icons.verified_rounded
@@ -1224,6 +1251,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
           ),
         ],
       ),
+      const SizedBox(height: 12),
+      SpecsCard(listing: _current, onChanged: _apply),
     ];
   }
 
@@ -1344,22 +1373,13 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
       Grade.good: 'Light signs of use',
       Grade.fair: 'Noticeable scratches',
     };
-    const checkIcons = [
-      Icons.visibility_outlined,
-      Icons.fingerprint_rounded,
-      Icons.photo_camera_outlined,
-      Icons.volume_up_outlined,
-      Icons.wifi_rounded,
-      Icons.electrical_services_rounded,
-      Icons.vibration_rounded,
-      Icons.lock_open_rounded,
-    ];
-    final allOk =
-        _l.checks.values.every((v) => v) &&
-        _l.checks.length == kChecklist.length;
-    final health = _l.battery >= 85 && allOk
+    final items = inspectionItems(_l.deviceType, _l.brand);
+    final okCount = items.where((i) => _l.checks[i] == true).length;
+    final allOk = okCount == items.length;
+    final batt = _showBattery ? _l.battery : 100;
+    final health = batt >= 85 && allOk
         ? 'Excellent'
-        : _l.battery >= 75
+        : batt >= 75 && okCount >= items.length - 2
         ? 'Good'
         : 'Fair';
     final healthColor = health == 'Excellent'
@@ -1445,6 +1465,7 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
             ),
             Row(
               children: [
+                if (_showBattery) ...[
                 Expanded(
                   child: _HealthTile(
                     child: Row(
@@ -1481,6 +1502,7 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: _HealthTile(
                     onTap: () => _goTo(1),
@@ -1496,8 +1518,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'IMEI',
+                              Text(
+                                _hasImei ? 'IMEI' : 'Serial',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: LX.ink,
@@ -1506,16 +1528,22 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                               Row(
                                 children: [
                                   Icon(
-                                    imeiOk
+                                    imeiOk || !_hasImei
                                         ? Icons.check_circle_rounded
                                         : Icons.error_rounded,
                                     size: 14,
-                                    color: imeiOk ? LX.green : LX.red,
+                                    color: imeiOk || !_hasImei
+                                        ? LX.green
+                                        : LX.red,
                                   ),
                                   const SizedBox(width: 3),
                                   Flexible(
                                     child: Text(
-                                      imeiOk
+                                      !_hasImei
+                                          ? (_imei.text.isEmpty
+                                                ? 'Optional'
+                                                : 'Added')
+                                          : imeiOk
                                           ? 'Checksum valid'
                                           : 'Add in Details',
                                       maxLines: 1,
@@ -1523,7 +1551,9 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                                       style: TextStyle(
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w600,
-                                        color: imeiOk ? LX.green : LX.red,
+                                        color: imeiOk || !_hasImei
+                                            ? LX.green
+                                            : LX.red,
                                       ),
                                     ),
                                   ),
@@ -1538,6 +1568,7 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                 ),
               ],
             ),
+            if (_showBattery) ...[
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 activeTrackColor: LX.blue,
@@ -1559,80 +1590,19 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
               'Drag to set battery health (Settings → Battery)',
               style: TextStyle(fontSize: 12, color: LX.muted),
             ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Text(
+                  'Battery health % is shown only for Apple devices. Tick "Battery & charging" below if the battery is fine.',
+                  style: TextStyle(fontSize: 12, color: LX.muted),
+                ),
+              ),
           ],
         ),
       ),
       const SizedBox(height: 12),
-      LxCard(
-        child: Column(
-          children: [
-            LxSection(
-              icon: Icons.fact_check_outlined,
-              title: 'Detailed Checks',
-              subtitle: 'Confirm the device features and condition',
-              trailing: GestureDetector(
-                onTap: () => setState(
-                  () => _l = _l.copyWith(
-                    checks: {for (final c in kChecklist) c: !allOk},
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: LX.blue.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        allOk
-                            ? Icons.check_circle_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        size: 18,
-                        color: LX.blue,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        allOk ? 'All Set' : 'Select All',
-                        style: const TextStyle(
-                          color: LX.blue,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 7,
-              childAspectRatio: 0.66,
-              children: [
-                for (var i = 0; i < kChecklist.length; i++)
-                  _CheckTile(
-                    icon: checkIcons[i],
-                    label: kChecklist[i],
-                    value: _l.checks[kChecklist[i]] ?? false,
-                    onChanged: (v) => setState(
-                      () => _l = _l.copyWith(
-                        checks: {..._l.checks, kChecklist[i]: v},
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      InspectionCard(listing: _current, onChanged: _apply),
       const SizedBox(height: 12),
       LxCard(
         child: Column(
@@ -2105,6 +2075,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
           ],
         ),
       ),
+      const SizedBox(height: 12),
+      VariantsCard(listing: _current, onChanged: _apply),
     ];
   }
 
@@ -2112,7 +2084,8 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
 
   List<Widget> _review() {
     final l = _current;
-    final checks = l.checks.values.where((v) => v).length;
+    final items = inspectionItems(l.deviceType, l.brand);
+    final checks = items.where((i) => l.checks[i] == true).length;
     final logo = brandLogo(l.brand);
     return [
       const LxHero(
@@ -2213,25 +2186,27 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _Stat(
-                  icon: Icons.battery_full_rounded,
-                  color: LX.green,
-                  label: 'Battery',
-                  value: '${l.battery}%',
-                ),
-                const SizedBox(width: 8),
+                if (_showBattery) ...[
+                  _Stat(
+                    icon: Icons.battery_full_rounded,
+                    color: LX.green,
+                    label: 'Battery',
+                    value: '${l.battery}%',
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _Stat(
                   icon: Icons.verified_user_outlined,
                   color: LX.blue,
                   label: 'Checks',
-                  value: '$checks/${kChecklist.length}',
+                  value: '$checks/${items.length}',
                 ),
                 const SizedBox(width: 8),
                 _Stat(
                   icon: Icons.inventory_2_outlined,
                   color: const Color(0xFFF59E0B),
                   label: 'In Stock',
-                  value: '${l.stock} Unit${l.stock > 1 ? 's' : ''}',
+                  value: '${l.totalStock} Unit${l.totalStock > 1 ? 's' : ''}',
                 ),
               ],
             ),
@@ -2274,15 +2249,38 @@ class _EditorState extends ConsumerState<ListingEditorScreen> {
                 ),
               ),
             ),
+            _Detail(
+              Icons.category_outlined,
+              'Category',
+              categoryOf(l.deviceType).plural,
+            ),
             _Detail(Icons.person_outline_rounded, 'Brand', l.brand),
             _Detail(Icons.smartphone_rounded, 'Model', l.model),
             _Detail(Icons.memory_rounded, 'RAM', l.ram),
             _Detail(Icons.sd_storage_outlined, 'Storage', l.storage),
             _Detail(Icons.palette_outlined, 'Colour', l.color),
             _Detail(Icons.verified_outlined, 'Condition', l.grade.label),
+            if (l.variants.isNotEmpty)
+              _Detail(
+                Icons.style_outlined,
+                'Variants',
+                '${l.variants.length + 1} options • from ${inr(l.fromPrice)}',
+              ),
+            if (l.specs.isNotEmpty)
+              _Detail(
+                Icons.list_alt_rounded,
+                'Specifications',
+                '${l.specs.length} added',
+              ),
+            if (l.highlights.isNotEmpty)
+              _Detail(
+                Icons.auto_awesome_mosaic_outlined,
+                'Highlights',
+                '${l.highlights.length} photo${l.highlights.length > 1 ? 's' : ''}',
+              ),
             _Detail(
               Icons.qr_code_2_rounded,
-              'IMEI',
+              _hasImei ? 'IMEI' : 'Serial',
               l.imei.isEmpty ? '—' : l.imei,
             ),
             _Detail(
@@ -2768,85 +2766,6 @@ class _Feature extends StatelessWidget {
   );
 }
 
-class _BrandTile extends StatelessWidget {
-  const _BrandTile({
-    required this.brand,
-    required this.selected,
-    required this.onTap,
-  });
-  final String brand;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final logo = brandLogo(brand);
-    final wordmark = brand == 'Samsung' || brand == 'vivo';
-    final img = logo == null
-        ? null
-        : Image.asset(
-            'assets/img/brands/brand_$logo.png',
-            height: wordmark ? 15 : 20,
-            fit: BoxFit.contain,
-            color: selected && (brand == 'Apple' || brand == 'Nothing')
-                ? Colors.white
-                : null,
-          );
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          gradient: selected ? LX.chip : null,
-          color: selected ? null : Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: selected ? Colors.white : LX.line,
-            width: selected ? 2 : 1.2,
-          ),
-          boxShadow: selected ? LX.soft(0.3) : LX.soft(0.05),
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (img != null)
-                  wordmark && selected
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: img,
-                        )
-                      : img,
-                if (!wordmark || logo == null) ...[
-                  if (logo != null) const SizedBox(width: 6),
-                  Text(
-                    brand,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: selected ? Colors.white : LX.ink,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _Field extends StatelessWidget {
   const _Field({
     required this.controller,
@@ -3159,68 +3078,6 @@ class _HealthTile extends StatelessWidget {
       child: child,
     ),
   );
-}
-
-class _CheckTile extends StatelessWidget {
-  const _CheckTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-  final IconData icon;
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-        decoration: BoxDecoration(
-          color: value ? const Color(0xFFF5F8FF) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: value ? const Color(0xFFC7D7FE) : LX.line),
-        ),
-        child: Column(
-          children: [
-            ShaderMask(
-              blendMode: BlendMode.srcIn,
-              shaderCallback: (r) =>
-                  (value
-                          ? LX.chip
-                          : const LinearGradient(
-                              colors: [Color(0xFF9AA0B8), Color(0xFF9AA0B8)],
-                            ))
-                      .createShader(r),
-              child: Icon(icon, size: 26),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: LX.ink,
-                  height: 1.15,
-                ),
-              ),
-            ),
-            SizedBox(
-              height: 26,
-              child: LxSwitch(value: value, onChanged: onChanged),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _PriceRow extends StatelessWidget {

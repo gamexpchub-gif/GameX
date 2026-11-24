@@ -170,9 +170,118 @@ InspectionReport buildInspection({
   );
 }
 
-InspectionReport inspectionFor(Product p) => buildInspection(
-  grade: gradeKey(p.condition),
-  battery: p.batteryHealth == 0 ? 90 : p.batteryHealth,
-  checks: p.checks,
-  defects: p.defects,
-);
+const _legacyChecks = {
+  'Display & touch',
+  'Face ID / Fingerprint',
+  'Front & rear cameras',
+  'Speakers & microphone',
+  'Wi-Fi, Bluetooth & SIM',
+  'Charging port',
+  'Buttons & vibration',
+  'No iCloud / Google lock',
+};
+
+/// Seller checklist item → report section (mirrors the seller app).
+const _sections = <String, (String, IconData)>{
+  'Display & touch': ('Screen', Icons.smartphone_rounded),
+  'No dead pixels / lines': ('Screen', Icons.smartphone_rounded),
+  'Original display (not replaced)': ('Screen', Icons.smartphone_rounded),
+  'Face ID / Touch ID': ('Security', Icons.fingerprint_rounded),
+  'Face ID / Fingerprint': ('Security', Icons.fingerprint_rounded),
+  'Front & rear cameras': ('Camera & audio', Icons.photo_camera_outlined),
+  'Flash & torch': ('Camera & audio', Icons.photo_camera_outlined),
+  'Speakers & microphone': ('Camera & audio', Icons.photo_camera_outlined),
+  'Earpiece (calls)': ('Camera & audio', Icons.photo_camera_outlined),
+  'Calling & network': ('Connectivity', Icons.wifi_rounded),
+  'Wi-Fi, Bluetooth & SIM': ('Connectivity', Icons.wifi_rounded),
+  'GPS / location': ('Connectivity', Icons.wifi_rounded),
+  'Charging port': ('Hardware', Icons.memory_rounded),
+  'Battery & charging': ('Hardware', Icons.memory_rounded),
+  'Buttons & vibration': ('Hardware', Icons.memory_rounded),
+  'Sensors (proximity, auto-rotate)': ('Hardware', Icons.memory_rounded),
+  'Frame not bent / cracked': ('Body', Icons.crop_portrait_rounded),
+  'Back glass / panel intact': ('Body', Icons.crop_portrait_rounded),
+  'No iCloud lock (Find My off)': ('Account & locks', Icons.lock_open_rounded),
+  'No iCloud / Google lock': ('Account & locks', Icons.lock_open_rounded),
+  'Unpaired / account removed': ('Account & locks', Icons.lock_open_rounded),
+  'Digital crown / buttons': ('Display & body', Icons.watch_rounded),
+  'Case & glass (no cracks)': ('Display & body', Icons.watch_rounded),
+  'Strap included & clean': ('Display & body', Icons.watch_rounded),
+  'Heart-rate & sensors': ('Functions', Icons.favorite_border_rounded),
+  'Charging': ('Functions', Icons.favorite_border_rounded),
+  'Bluetooth pairing': ('Functions', Icons.favorite_border_rounded),
+  'Speaker & microphone': ('Functions', Icons.favorite_border_rounded),
+  'Vibration': ('Functions', Icons.favorite_border_rounded),
+  'Left earbud / speaker': ('Sound', Icons.headphones_rounded),
+  'Right earbud / speaker': ('Sound', Icons.headphones_rounded),
+  'Microphone': ('Sound', Icons.headphones_rounded),
+  'Noise cancellation': ('Sound', Icons.headphones_rounded),
+  'Charging case': ('Battery & case', Icons.battery_charging_full_rounded),
+  'Battery holds charge': (
+    'Battery & case',
+    Icons.battery_charging_full_rounded,
+  ),
+  'Pairing works': ('Battery & case', Icons.battery_charging_full_rounded),
+  'Clean & hygienic': ('Body', Icons.crop_portrait_rounded),
+  'No physical damage': ('Body', Icons.crop_portrait_rounded),
+};
+
+/// Report built straight from the seller's ticked checklist: every item is
+/// shown, unticked ones as "Not working / not checked".
+InspectionReport _fromSellerChecklist(Product p) {
+  final grade = gradeKey(p.condition);
+  final cosmetic = switch (grade) {
+    'likeNew' => CheckResult.pass,
+    'excellent' => CheckResult.pass,
+    _ => CheckResult.minor,
+  };
+  final groups = <String, (IconData, List<InspectionItem>)>{};
+  for (final e in p.checks.entries) {
+    final (title, icon) = _sections[e.key] ?? ('Other checks', Icons.checklist);
+    (groups[title] ??= (icon, [])).$2.add(
+      InspectionItem(
+        e.key,
+        e.value ? CheckResult.pass : CheckResult.fail,
+        e.value ? null : 'Not working / not checked',
+      ),
+    );
+  }
+  final b = p.batteryHealth;
+  return InspectionReport(
+    grade: grade,
+    battery: b,
+    defects: p.defects,
+    groups: [
+      InspectionGroup('Cosmetic condition', Icons.diamond_outlined, [
+        InspectionItem(
+          'Overall look (${gradeLabels[grade]})',
+          cosmetic,
+          cosmetic == CheckResult.minor ? 'Visible signs of use' : null,
+        ),
+      ]),
+      if (b > 0)
+        InspectionGroup('Battery', Icons.battery_charging_full_rounded, [
+          InspectionItem(
+            'Battery health',
+            b >= 85
+                ? CheckResult.pass
+                : b >= 78
+                ? CheckResult.minor
+                : CheckResult.fail,
+            '$b% of original capacity',
+          ),
+        ]),
+      for (final e in groups.entries) InspectionGroup(e.key, e.value.$1, e.value.$2),
+    ],
+  );
+}
+
+InspectionReport inspectionFor(Product p) =>
+    p.checks.keys.any((k) => !_legacyChecks.contains(k))
+    ? _fromSellerChecklist(p)
+    : buildInspection(
+        grade: gradeKey(p.condition),
+        battery: p.batteryHealth == 0 ? 90 : p.batteryHealth,
+        checks: p.checks,
+        defects: p.defects,
+      );

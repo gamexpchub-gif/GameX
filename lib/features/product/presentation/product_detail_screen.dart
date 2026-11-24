@@ -88,7 +88,49 @@ class ProductDetailScreen extends ConsumerWidget {
 
 // ───────────────────────────── Options ─────────────────────────────
 
-const _storageLadder = ['64GB', '128GB', '256GB', '512GB', '1TB'];
+const _storageLadder = [
+  '32GB',
+  '64GB',
+  '128GB',
+  '256GB',
+  '512GB',
+  '1TB',
+  '2TB',
+];
+
+/// Swatch for a colour name typed by a seller.
+int colourValueOf(String name) {
+  final n = name.toLowerCase();
+  const table = {
+    'black': 0xFF151515,
+    'white': 0xFFF2F2F2,
+    'blue': 0xFF2F7BEF,
+    'purple': 0xFF8B55E8,
+    'green': 0xFF3DAA5C,
+    'red': 0xFFE53935,
+    'gold': 0xFFE2C08D,
+    'silver': 0xFFD9DCE1,
+    'grey': 0xFF8E8E93,
+    'gray': 0xFF8E8E93,
+    'pink': 0xFFF4B6C2,
+    'yellow': 0xFFF7D154,
+    'orange': 0xFFF08A3C,
+    'midnight': 0xFF1C2230,
+    'starlight': 0xFFF1E9DC,
+    'titanium': 0xFFBFB6A8,
+    'graphite': 0xFF4A4A4C,
+    'lavender': 0xFFC8B6E2,
+    'mint': 0xFFBFE3D0,
+    'cream': 0xFFF3EBDD,
+  };
+  for (final e in table.entries) {
+    if (n == e.key) return e.value;
+  }
+  for (final e in table.entries) {
+    if (n.contains(e.key)) return e.value;
+  }
+  return 0xFF9AA0B4;
+}
 
 class ColorOption {
   const ColorOption(this.name, this.color, [this.hero]);
@@ -121,8 +163,23 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   Product get p => widget.product;
   String get _key => productKeyOf(p.id);
 
+  /// Real colour / storage options of a marketplace listing.
+  bool get _real => p.variants.isNotEmpty;
+
   late final List<String> _storages = () {
+    if (_real) {
+      final xs = {for (final v in p.variants) v.storage}.toList();
+      int rank(String x) {
+        final i = _storageLadder.indexOf(x);
+        return i < 0 ? 99 : i;
+      }
+
+      xs.sort((a, b) => rank(a).compareTo(rank(b)));
+      return xs;
+    }
     final base = p.storage ?? '';
+    // Marketplace phones without options are sold exactly as listed.
+    if (p.isMarketplace) return [base.isEmpty ? 'Standard' : base];
     final i = _storageLadder.indexOf(base);
     if (i < 0) return [base.isEmpty ? 'Standard' : base];
     final start = i.clamp(0, _storageLadder.length - 3);
@@ -133,14 +190,24 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   }();
 
   late final List<ColorOption> _colors = () {
+    if (_real) {
+      final seen = <String>{};
+      return [
+        for (final v in p.variants)
+          if (seen.add(v.color.toLowerCase()))
+            ColorOption(v.color, v.colorValue ?? colourValueOf(v.color)),
+      ];
+    }
     final hero = MockData.pdpHero[_key];
     final isIphone = hero != null;
+    final own = ColorOption(
+      p.colorName ?? 'Original',
+      p.colors.isEmpty ? 0xFF5B3E96 : p.colors.first,
+      hero,
+    );
+    if (p.isMarketplace) return [own];
     final list = <ColorOption>[
-      ColorOption(
-        p.colorName ?? 'Original',
-        p.colors.isEmpty ? 0xFF5B3E96 : p.colors.first,
-        hero,
-      ),
+      own,
       ColorOption('Silver', 0xFFE3E6EE, isIphone ? 'iphone_starlight' : null),
       ColorOption(
         'Space Black',
@@ -156,16 +223,76 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     ];
   }();
 
+  ProductVariant? _optionAt(int c, int s) {
+    if (!_real) return null;
+    for (final v in p.variants) {
+      if (v.color.toLowerCase() == _colors[c].name.toLowerCase() &&
+          v.storage == _storages[s]) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  /// The listing option currently picked (marketplace with options).
+  ProductVariant? get _option => _optionAt(_color, _storage);
+
+  bool _available(int c, int s) {
+    if (!_real) return true;
+    final o = _optionAt(c, s);
+    return o != null && o.stock > 0;
+  }
+
+  void _pickColor(int i) {
+    var s = _storage;
+    if (_real && _optionAt(i, s) == null) {
+      s = List.generate(_storages.length, (k) => k).firstWhere(
+        (k) => _available(i, k),
+        orElse: () => List.generate(_storages.length, (k) => k).firstWhere(
+          (k) => _optionAt(i, k) != null,
+          orElse: () => s,
+        ),
+      );
+    }
+    setState(() {
+      _color = i;
+      _storage = s;
+      _page = 0;
+    });
+  }
+
+  void _pickStorage(int i) {
+    var c = _color;
+    if (_real && _optionAt(c, i) == null) {
+      c = List.generate(_colors.length, (k) => k).firstWhere(
+        (k) => _available(k, i),
+        orElse: () => List.generate(_colors.length, (k) => k).firstWhere(
+          (k) => _optionAt(k, i) != null,
+          orElse: () => c,
+        ),
+      );
+    }
+    setState(() {
+      _storage = i;
+      _color = c;
+    });
+  }
+
   int get _baseStorage =>
       _storages.indexOf(p.storage ?? '').clamp(0, _storages.length - 1);
-  double _priceFor(int s) =>
-      _round99(p.price * (1 + (s - _baseStorage) * 0.14));
+  double _priceFor(int s) => _real
+      ? (_optionAt(_color, s)?.price ?? p.price)
+      : _round99(p.price * (1 + (s - _baseStorage) * 0.14));
   double get _price => _priceFor(_storage);
-  double get _mrp => _round99(p.mrp * (1 + (_storage - _baseStorage) * 0.14));
+  double get _mrp => _real
+      ? (_option?.mrp ?? p.mrp)
+      : _round99(p.mrp * (1 + (_storage - _baseStorage) * 0.14));
   int get _off => _mrp <= _price ? 0 : ((_mrp - _price) / _mrp * 100).round();
 
   /// Gallery pages (asset/art/network specs).
   List<String> get _pages {
+    final img = _option?.image;
+    if (img != null) return [img, ...p.images];
     final hero = _colors[_color].hero;
     if (hero == null) return p.images;
     return [
@@ -175,20 +302,35 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     ];
   }
 
+  String? get _ram => _option?.ram ?? p.ram;
+
   String get _variantLabel =>
-      '${p.ram != null ? '${p.ram} / ' : ''}${_storages[_storage]} • ${_colors[_color].name}';
+      '${_ram != null ? '$_ram / ' : ''}${_storages[_storage]} • ${_colors[_color].name}';
 
   Product get _configured => p.copyWith(
     price: _price,
     oldPrice: _mrp,
     variant: '${_storages[_storage]} • ${_colors[_color].name}',
     colors: [_colors[_color].color],
+    variantId: _option?.id,
+    ram: _ram,
+    stock: _option?.stock,
   );
 
   @override
   void initState() {
     super.initState();
     _storage = _baseStorage;
+    if (_real) {
+      final start = p.variants.firstWhere(
+        (v) => v.id == p.variantId,
+        orElse: () => p.variants.first,
+      );
+      _color = _colors
+          .indexWhere((c) => c.name.toLowerCase() == start.color.toLowerCase())
+          .clamp(0, _colors.length - 1);
+      _storage = _storages.indexOf(start.storage).clamp(0, _storages.length - 1);
+    }
     Future.microtask(() => ref.read(recentlyViewedProvider.notifier).record(p));
   }
 
@@ -199,6 +341,10 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   }
 
   void _add({required bool buy}) {
+    if (_real && !_available(_color, _storage)) {
+      showAppSnack(context, 'This colour / storage is sold out');
+      return;
+    }
     HapticFeedback.mediumImpact();
     ref
         .read(cartProvider.notifier)
@@ -973,10 +1119,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                         GestureDetector(
                           onTap: () {
                             HapticFeedback.selectionClick();
-                            setState(() {
-                              _color = i;
-                              _page = 0;
-                            });
+                            _pickColor(i);
                             if (_gallery.hasClients) _gallery.jumpToPage(0);
                           },
                           child: _Swatch(
@@ -1013,7 +1156,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                           child: GestureDetector(
                             onTap: () {
                               HapticFeedback.selectionClick();
-                              setState(() => _storage = i);
+                              _pickStorage(i);
                             },
                             child: Container(
                               height: 64 * d,
@@ -1052,9 +1195,18 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                                     style: TextStyle(
                                       fontSize: 24 * d,
                                       fontWeight: FontWeight.w600,
+                                      decoration:
+                                          i != _storage &&
+                                              !_available(_color, i)
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                       color: i == _storage
                                           ? Colors.white
-                                          : HomeColors.ink,
+                                          : _available(_color, i)
+                                          ? HomeColors.ink
+                                          : HomeColors.inkSoft.withValues(
+                                              alpha: 0.5,
+                                            ),
                                     ),
                                   ),
                                 ),

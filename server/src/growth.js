@@ -309,14 +309,14 @@ export function mountGrowth(ctx) {
   }
   const offerView = (o) => {
     const l = find('listings', o.listingId);
-    return { ...o, listing: l ? { id: l.id, title: titleOf(l), photo: l.photos?.[0], price: l.price, stock: l.stock, live: isLive(l) } : null };
+    return { ...o, listing: l ? { id: l.id, title: titleOf(l), photo: l.photos?.[0], price: l.price, stock: units(l), live: isLive(l) } : null };
   };
 
   api.post('/offers', (req, res) => {
     expireOffers();
     const { listingId, customer = {}, amount, note = '' } = req.body || {};
     const l = find('listings', listingId);
-    if (!l || !isLive(l) || l.stock <= 0) return bad(res, 404, 'This phone is not available');
+    if (!l || !isLive(l) || units(l) <= 0) return bad(res, 404, 'This phone is not available');
     if (!customer.id) return bad(res, 401, 'Log in to make an offer');
     const a = Math.round(Number(amount));
     if (!(a > 0) || a >= l.price) return bad(res, 400, 'Offer must be below the current price');
@@ -463,7 +463,7 @@ export function mountGrowth(ctx) {
 
   /** Call after a listing's price, stock or status changed. */
   function listingChanged(l, before) {
-    const live = isLive(l) && l.stock > 0;
+    const live = isLive(l) && units(l) > 0;
     for (const a of D().alerts) {
       if (a.status !== 'active' || a.listingId !== l.id) continue;
       if (a.type === 'price' && live && l.price < before.price && l.price <= a.targetPrice) {
@@ -474,11 +474,12 @@ export function mountGrowth(ctx) {
       if (a.type === 'stock' && live && !(before.live && before.stock > 0)) {
         a.status = 'fired';
         a.firedAt = now();
-        notifyCustomer(a.customerId, `Back in stock: ${a.title} 🔔`, `Available again at ${money(l.price)}. Only ${l.stock} left.`, 'stock', `/product/${l.id}`);
+        notifyCustomer(a.customerId, `Back in stock: ${a.title} 🔔`, `Available again at ${money(l.price)}. Only ${units(l)} left.`, 'stock', `/product/${l.id}`);
       }
     }
   }
-  const snapshot = (l) => ({ price: l.price, stock: l.stock, live: isLive(l) });
+  const units = (l) => (l.stock || 0) + (l.variants || []).reduce((t, v) => t + (v.stock || 0), 0);
+  const snapshot = (l) => ({ price: l.price, stock: units(l), live: isLive(l) });
 
   // ------------------------------------------- notifications & push --
   api.get('/customers/:id/notifications', (req, res) => {
@@ -729,5 +730,5 @@ export function mountGrowth(ctx) {
     res.json(t);
   });
 
-  return { migrate, checkOrder, onOrderPlaced, onDelivered, onCancelled, offerPrice, codeFor, notifyCustomer, listingChanged, snapshot };
+  return { migrate, checkOrder, onOrderPlaced, onDelivered, onCancelled, offerPrice, codeFor, notifyCustomer, listingChanged, snapshot, sendPush };
 }

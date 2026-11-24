@@ -1664,7 +1664,7 @@ class _InventoryHealth extends StatelessWidget {
         .where((l) => l.status == ListingStatus.active)
         .toList();
     final aging = active.where((l) => l.ageDays >= 30).length;
-    final low = active.where((l) => l.stock <= 1).length;
+    final low = active.where((l) => l.totalStock <= 1).length;
     final out = listings.where((l) => l.status == ListingStatus.soldOut).length;
     final paused = listings
         .where((l) => l.status == ListingStatus.paused)

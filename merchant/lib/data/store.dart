@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api.dart';
+import '../core/seller_alerts.dart';
 import '../core/storage.dart';
 import 'models.dart';
 
@@ -257,6 +258,9 @@ class SyncNotifier extends Notifier<SellerData> {
       final data = SellerData.fromJson({...j, 'syncedAt': null});
       state = data;
       await _store.writeJson(_kCache, data.toJson());
+      final alerts = ref.read(sellerAlertsProvider);
+      unawaited(alerts.onSync(data.notices));
+      unawaited(alerts.startPush(sid, refresh));
     } on ApiException catch (e) {
       state = state.copyWith(syncing: false, error: e.message);
     } catch (_) {
@@ -279,13 +283,26 @@ class SyncNotifier extends Notifier<SellerData> {
   /// Uploads any local photos, then saves. [submit] sends it for QC.
   Future<Listing> saveListing(Listing l, {required bool submit}) =>
       _do((sid) async {
-        final photos = <String>[];
-        for (final p in l.photos) {
-          final isServer = p.startsWith('/img/') || p.startsWith('/uploads/');
-          photos.add(isServer ? p : await _api.upload(p));
-        }
+        Future<String> up(String p) async =>
+            p.startsWith('/img/') || p.startsWith('/uploads/') || p.isEmpty
+            ? p
+            : await _api.upload(p);
+        final photos = [for (final p in l.photos) await up(p)];
+        final highlights = [
+          for (final h in l.highlights) h.copyWith(image: await up(h.image)),
+        ];
+        final variants = [
+          for (final v in l.variants)
+            v.photo == null ? v : v.copyWith(photo: await up(v.photo!)),
+        ];
         final j = await _api.post('/seller/$sid/listings', {
-          ...l.copyWith(photos: photos).toJson(),
+          ...l
+              .copyWith(
+                photos: photos,
+                highlights: highlights,
+                variants: variants,
+              )
+              .toJson(),
           'submit': submit,
         });
         return Listing.fromJson(j as Map<String, dynamic>);
@@ -297,6 +314,23 @@ class SyncNotifier extends Notifier<SellerData> {
   Future<void> setStock(String id, int stock) {
     _local(id, (l) => l.copyWith(stock: stock));
     return _patchListing(id, {'stock': stock});
+  }
+
+  Future<void> setVariantStock(String id, String variantId, int stock) {
+    _local(
+      id,
+      (l) => l.copyWith(
+        variants: [
+          for (final v in l.variants)
+            v.id == variantId ? v.copyWith(stock: stock) : v,
+        ],
+      ),
+    );
+    return _patchListing(id, {
+      'variants': [
+        {'id': variantId, 'stock': stock},
+      ],
+    });
   }
 
   Future<void> setPrice(String id, int price) =>

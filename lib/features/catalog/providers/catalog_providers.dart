@@ -22,6 +22,63 @@ final bannersProvider = FutureProvider<List<PromoBanner>>(
   (ref) => ref.watch(productRepositoryProvider).banners(),
 );
 
+/// Promo cards lower on the home screen (Admin → Banners → "Promo card").
+class PromoCard {
+  const PromoCard({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.cta,
+    required this.link,
+    required this.color,
+    this.image,
+  });
+  final String id;
+  final String title;
+  final String subtitle;
+  final String cta;
+
+  /// In-app route (`/trade-in`) or a web address (`https://…`).
+  final String link;
+  final int color;
+  final String? image;
+}
+
+int _hex(Object? v, int fallback) {
+  final s = (v as String? ?? '').replaceFirst('#', '');
+  final n = int.tryParse(s, radix: 16);
+  if (n == null) return fallback;
+  return s.length <= 6 ? 0xFF000000 | n : n;
+}
+
+final promoCardsProvider = FutureProvider<List<PromoCard>>((ref) async {
+  final api = ref.watch(apiProvider);
+  try {
+    final list = await api.get('/banners?placement=promo') as List;
+    return [
+      for (final b in list.cast<Map<String, dynamic>>())
+        if ((b['placement'] ?? 'hero') == 'promo')
+          PromoCard(
+            id: b['id'] as String,
+            title: b['title'] as String? ?? '',
+            subtitle: b['subtitle'] as String? ?? '',
+            cta: (b['cta'] as String?)?.trim().isNotEmpty == true
+                ? b['cta'] as String
+                : 'Open',
+            link: b['link'] as String? ?? '',
+            color: _hex(b['color'], 0xFF4F46E5),
+            image: (b['image'] as String?)?.isNotEmpty == true
+                ? (b['image'] as String).startsWith('/')
+                      ? api.media(b['image'] as String)
+                      : b['image'] as String
+                : null,
+          ),
+    ];
+  } catch (_) {
+    return const [];
+  }
+});
+
 typedef ProductQuery = ({String? categoryId, String? query, ProductSort sort});
 
 final productsProvider = FutureProvider.family<List<Product>, ProductQuery>((

@@ -185,13 +185,15 @@ class _Report extends StatelessWidget {
             ),
           ),
         ],
-        const TTitle('Battery'),
-        TCard(child: _Battery(health: r.battery)),
+        if (r.battery > 0) ...[
+          const TTitle('Battery'),
+          TCard(child: _Battery(health: r.battery)),
+        ],
         TTitle(
           'Real photos${r.defects.isEmpty ? '' : ' • ${r.defects.length} marked'}',
         ),
         _PhotoViewer(product: p),
-        const TTitle('32-point check'),
+        TTitle(r.total == 32 ? '32-point check' : '${r.total}-point check'),
         for (final g in r.groups) ...[
           _GroupCard(group: g),
           const SizedBox(height: 10),

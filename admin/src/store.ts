@@ -13,7 +13,8 @@ export interface Listing {
   storage: string;
   color: string;
   grade: Grade;
-  battery: number;
+  /** null for non-Apple devices (battery health only shown for Apple). */
+  battery: number | null;
   imei: string;
   price: number;
   mrp: number;
@@ -35,6 +36,10 @@ export interface Listing {
   qc: { by: string; at: string; decision: string; notes?: string } | null;
   defects?: Defect[];
   returnDays?: number;
+  deviceType?: string;
+  variants?: { id: string; color: string; storage: string; ram: string; price: number; mrp: number; stock: number; photo?: string | null }[];
+  specs?: { group: string; k: string; v: string }[];
+  highlights?: { image: string; title: string; text: string }[];
 }
 
 /** A marked cosmetic defect on a listing photo (x/y are 0..1). */
@@ -181,6 +186,12 @@ export interface Banner {
   link: string;
   active: boolean;
   order: number;
+  /** 'hero' = top carousel, 'promo' = button cards lower on the home screen. */
+  placement?: 'hero' | 'promo';
+  /** Promo card background, e.g. "#6D28D9". */
+  color?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
 }
 
 export interface Coupon {

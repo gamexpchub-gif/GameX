@@ -17,6 +17,88 @@ class Category {
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'icon': icon};
 }
 
+/// A colour / storage option of a marketplace listing with its own price.
+class ProductVariant {
+  const ProductVariant({
+    required this.id,
+    required this.color,
+    required this.storage,
+    required this.price,
+    required this.mrp,
+    required this.stock,
+    this.ram,
+    this.colorValue,
+    this.image,
+  });
+
+  /// 'base' = the listing's main option.
+  final String id;
+  final String color;
+  final String storage;
+  final String? ram;
+  final double price;
+  final double mrp;
+  final int stock;
+
+  /// ARGB swatch, when known.
+  final int? colorValue;
+  final String? image;
+
+  factory ProductVariant.fromJson(Map<String, dynamic> j) => ProductVariant(
+    id: j['id'] as String,
+    color: j['color'] as String? ?? '',
+    storage: j['storage'] as String? ?? '',
+    ram: j['ram'] as String?,
+    price: (j['price'] as num).toDouble(),
+    mrp: (j['mrp'] as num?)?.toDouble() ?? (j['price'] as num).toDouble(),
+    stock: (j['stock'] as num?)?.toInt() ?? 0,
+    colorValue: (j['colorValue'] as num?)?.toInt(),
+    image: j['image'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'color': color,
+    'storage': storage,
+    'ram': ram,
+    'price': price,
+    'mrp': mrp,
+    'stock': stock,
+    'colorValue': colorValue,
+    'image': image,
+  };
+}
+
+/// Seller highlight photo with a caption.
+class ProductHighlight {
+  const ProductHighlight({required this.image, this.title = '', this.text = ''});
+  final String image;
+  final String title;
+  final String text;
+
+  factory ProductHighlight.fromJson(Map<String, dynamic> j) => ProductHighlight(
+    image: j['image'] as String,
+    title: j['title'] as String? ?? '',
+    text: j['text'] as String? ?? '',
+  );
+  Map<String, dynamic> toJson() => {'image': image, 'title': title, 'text': text};
+}
+
+/// Grouped specification row (Display › Refresh rate › 120Hz).
+class SpecEntry {
+  const SpecEntry(this.group, this.key, this.value);
+  final String group;
+  final String key;
+  final String value;
+
+  factory SpecEntry.fromJson(Map<String, dynamic> j) => SpecEntry(
+    j['group'] as String? ?? 'General',
+    j['k'] as String? ?? '',
+    j['v'] as String? ?? '',
+  );
+  Map<String, dynamic> toJson() => {'group': group, 'k': key, 'v': value};
+}
+
 class Product {
   const Product({
     required this.id,
@@ -49,6 +131,11 @@ class Product {
     this.checks = const {},
     this.defects = const [],
     this.returnDays = 7,
+    this.variants = const [],
+    this.variantId,
+    this.highlights = const [],
+    this.specRows = const [],
+    this.deviceType = 'Mobile Phone',
   });
 
   final String id;
@@ -106,6 +193,20 @@ class Product {
   /// Days the buyer can return after delivery (0 = no returns).
   final int returnDays;
 
+  /// Every colour / storage option (marketplace listings). Empty for the
+  /// built-in catalogue.
+  final List<ProductVariant> variants;
+
+  /// Option picked on the product page ('base' or a variant id).
+  final String? variantId;
+  final List<ProductHighlight> highlights;
+
+  /// Seller's grouped specifications.
+  final List<SpecEntry> specRows;
+
+  /// Mobile Phone, Tablet, Smartwatch, Earbuds & Audio.
+  final String deviceType;
+
   bool get isMarketplace => sellerId != null;
 
   bool get inStock => stock > 0;
@@ -139,6 +240,8 @@ class Product {
     int? batteryHealth,
     int? stock,
     List<int>? colors,
+    String? variantId,
+    List<String>? images,
   }) => Product(
     id: id ?? this.id,
     name: name,
@@ -147,7 +250,7 @@ class Product {
     description: description,
     price: price ?? this.price,
     oldPrice: oldPrice ?? this.oldPrice,
-    images: images,
+    images: images ?? this.images,
     rating: rating,
     reviewCount: reviewCount,
     stock: stock ?? this.stock,
@@ -170,6 +273,11 @@ class Product {
     checks: checks,
     defects: defects,
     returnDays: returnDays,
+    variants: variants,
+    variantId: variantId ?? this.variantId,
+    highlights: highlights,
+    specRows: specRows,
+    deviceType: deviceType,
   );
 
   int get discountPercent {
@@ -212,6 +320,20 @@ class Product {
         PhotoDefect.fromJson(d as Map<String, dynamic>),
     ],
     returnDays: (json['returnDays'] as num?)?.toInt() ?? 7,
+    variants: [
+      for (final v in (json['variants'] as List? ?? const []))
+        ProductVariant.fromJson(v as Map<String, dynamic>),
+    ],
+    variantId: json['variantId'] as String?,
+    highlights: [
+      for (final v in (json['highlights'] as List? ?? const []))
+        ProductHighlight.fromJson(v as Map<String, dynamic>),
+    ],
+    specRows: [
+      for (final v in (json['specRows'] as List? ?? const []))
+        SpecEntry.fromJson(v as Map<String, dynamic>),
+    ],
+    deviceType: json['deviceType'] as String? ?? 'Mobile Phone',
   );
 
   Map<String, dynamic> toJson() => {
@@ -245,6 +367,12 @@ class Product {
     'checks': checks,
     'defects': [for (final d in defects) d.toJson()],
     'returnDays': returnDays,
+    if (variants.isNotEmpty) 'variants': [for (final v in variants) v.toJson()],
+    'variantId': ?variantId,
+    if (highlights.isNotEmpty)
+      'highlights': [for (final h in highlights) h.toJson()],
+    if (specRows.isNotEmpty) 'specRows': [for (final r in specRows) r.toJson()],
+    'deviceType': deviceType,
   };
 }
 

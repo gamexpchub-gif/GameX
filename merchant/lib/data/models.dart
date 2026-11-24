@@ -46,6 +46,109 @@ const kChecklist = [
   'No iCloud / Google lock',
 ];
 
+/// Another colour / storage option of a listing with its own price & stock.
+class ListingVariant {
+  const ListingVariant({
+    required this.id,
+    required this.color,
+    required this.storage,
+    required this.ram,
+    required this.price,
+    required this.mrp,
+    required this.stock,
+    this.colorHex,
+    this.photo,
+  });
+
+  final String id;
+  final String color;
+  final int? colorHex;
+  final String storage;
+  final String ram;
+  final int price;
+  final int mrp;
+  final int stock;
+
+  /// Photo showing this colour (optional).
+  final String? photo;
+
+  String get label => '${ram.isEmpty ? '' : '$ram / '}$storage • $color';
+
+  ListingVariant copyWith({String? photo, int? price, int? stock}) =>
+      ListingVariant(
+        id: id,
+        color: color,
+        colorHex: colorHex,
+        storage: storage,
+        ram: ram,
+        price: price ?? this.price,
+        mrp: mrp,
+        stock: stock ?? this.stock,
+        photo: photo ?? this.photo,
+      );
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'color': color,
+    'colorHex': colorHex,
+    'storage': storage,
+    'ram': ram,
+    'price': price,
+    'mrp': mrp,
+    'stock': stock,
+    'photo': photo,
+  };
+
+  factory ListingVariant.fromJson(Map<String, dynamic> j) => ListingVariant(
+    id: j['id'] as String,
+    color: j['color'] as String? ?? '',
+    colorHex: (j['colorHex'] as num?)?.toInt(),
+    storage: j['storage'] as String? ?? '',
+    ram: j['ram'] as String? ?? '',
+    price: (j['price'] as num?)?.toInt() ?? 0,
+    mrp: (j['mrp'] as num?)?.toInt() ?? 0,
+    stock: (j['stock'] as num?)?.toInt() ?? 0,
+    photo: j['photo'] as String?,
+  );
+}
+
+/// One specification row, e.g. Display › Refresh rate › 120Hz.
+class SpecRow {
+  const SpecRow(this.group, this.key, this.value);
+  final String group;
+  final String key;
+  final String value;
+
+  Map<String, Object?> toJson() => {'group': group, 'k': key, 'v': value};
+  factory SpecRow.fromJson(Map<String, dynamic> j) => SpecRow(
+    j['group'] as String? ?? 'General',
+    j['k'] as String? ?? '',
+    j['v'] as String? ?? '',
+  );
+}
+
+/// A feature highlight image with a caption (e.g. "48MP camera").
+class Highlight {
+  const Highlight({required this.image, this.title = '', this.text = ''});
+  final String image;
+  final String title;
+  final String text;
+
+  Highlight copyWith({String? image}) =>
+      Highlight(image: image ?? this.image, title: title, text: text);
+
+  Map<String, Object?> toJson() => {
+    'image': image,
+    'title': title,
+    'text': text,
+  };
+  factory Highlight.fromJson(Map<String, dynamic> j) => Highlight(
+    image: j['image'] as String? ?? '',
+    title: j['title'] as String? ?? '',
+    text: j['text'] as String? ?? '',
+  );
+}
+
 class Listing {
   const Listing({
     required this.id,
@@ -78,6 +181,9 @@ class Listing {
     this.sim = 'Dual SIM (Nano)',
     this.returnDays = 7,
     this.offerPercent = 0,
+    this.variants = const [],
+    this.specs = const [],
+    this.highlights = const [],
   });
 
   final String id;
@@ -119,13 +225,24 @@ class Listing {
   /// Extra launch discount shown to buyers (0 = off).
   final int offerPercent;
 
+  /// More colour / storage options (the fields above are the main option).
+  final List<ListingVariant> variants;
+  final List<SpecRow> specs;
+  final List<Highlight> highlights;
+
+  /// Units across the main option and all variants.
+  int get totalStock => stock + variants.fold(0, (t, v) => t + v.stock);
+
+  /// Lowest price across options ("from ₹…").
+  int get fromPrice => variants.fold(price, (m, v) => v.price < m ? v.price : m);
+
   int get ageDays => DateTime.now().difference(createdAt).inDays;
   double get conversion => views == 0 ? 0 : sold * 100 / views;
 
   String get title => '$brand $model'.trim();
   String get variant => '$ram / $storage';
   int get discount => mrp > price ? (((mrp - price) / mrp) * 100).round() : 0;
-  bool get lowStock => status == ListingStatus.active && stock <= 1;
+  bool get lowStock => status == ListingStatus.active && totalStock <= 1;
 
   Listing copyWith({
     String? id,
@@ -154,6 +271,9 @@ class Listing {
     String? sim,
     int? returnDays,
     int? offerPercent,
+    List<ListingVariant>? variants,
+    List<SpecRow>? specs,
+    List<Highlight>? highlights,
   }) => Listing(
     id: id ?? this.id,
     brand: brand ?? this.brand,
@@ -185,6 +305,9 @@ class Listing {
     sim: sim ?? this.sim,
     returnDays: returnDays ?? this.returnDays,
     offerPercent: offerPercent ?? this.offerPercent,
+    variants: variants ?? this.variants,
+    specs: specs ?? this.specs,
+    highlights: highlights ?? this.highlights,
   );
 
   Map<String, Object?> toJson() => {
@@ -215,6 +338,9 @@ class Listing {
     'sim': sim,
     'returnDays': returnDays,
     'offerPercent': offerPercent,
+    'variants': [for (final v in variants) v.toJson()],
+    'specs': [for (final x in specs) x.toJson()],
+    'highlights': [for (final h in highlights) h.toJson()],
   };
 
   factory Listing.fromJson(Map<String, dynamic> j) => Listing(
@@ -225,7 +351,7 @@ class Listing {
     storage: j['storage'] as String,
     color: j['color'] as String,
     grade: Grade.values.byName(j['grade'] as String),
-    battery: (j['battery'] as num).toInt(),
+    battery: (j['battery'] as num?)?.toInt() ?? 0,
     imei: j['imei'] as String,
     price: (j['price'] as num).toInt(),
     mrp: (j['mrp'] as num).toInt(),
@@ -248,6 +374,18 @@ class Listing {
     sim: j['sim'] as String? ?? 'Dual SIM (Nano)',
     returnDays: (j['returnDays'] as num?)?.toInt() ?? 7,
     offerPercent: (j['offerPercent'] as num?)?.toInt() ?? 0,
+    variants: [
+      for (final v in (j['variants'] as List? ?? const []))
+        ListingVariant.fromJson(v as Map<String, dynamic>),
+    ],
+    specs: [
+      for (final v in (j['specs'] as List? ?? const []))
+        SpecRow.fromJson(v as Map<String, dynamic>),
+    ],
+    highlights: [
+      for (final v in (j['highlights'] as List? ?? const []))
+        Highlight.fromJson(v as Map<String, dynamic>),
+    ],
   );
 }
 

@@ -13,7 +13,7 @@ import { openStore } from './storage.js';
 import { mountGrowth } from './growth.js';
 import { mountService } from './service.js';
 import { mountLaunch, otpProvider } from './launch.js';
-import { CHECKLIST, buildSeed, imeiFrom, titleOf } from './seed.js';
+import { CHECKLIST, PROMO_BANNERS, buildSeed, imeiFrom, titleOf } from './seed.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB_FILE = path.join(ROOT, 'data', 'db.json');
@@ -53,6 +53,12 @@ function migrate() {
     o.returnRequest ??= null;
   }
   for (const c of db.live) c.messages ??= [];
+  db.sellerPushTokens ??= [];
+  for (const b of db.banners) b.placement ??= 'hero';
+  if (!db.promoBannersSeeded) {
+    db.promoBannersSeeded = true;
+    db.banners.push(...PROMO_BANNERS.map((b) => ({ ...b })));
+  }
   growth?.migrate();
   service?.migrate();
   launch?.migrate();
@@ -94,8 +100,66 @@ function log(text, kind) {
   db.activity = db.activity.slice(0, 80);
 }
 function notify(sellerId, title, body, kind = 'info') {
-  db.notifications.unshift({ id: uid('N'), sellerId, title, body, kind, at: now(), read: [] });
-  db.notifications = db.notifications.slice(0, 200);
+  const n = { id: uid('N'), sellerId, title, body, kind, at: now(), read: [] };
+  db.notifications.unshift(n);
+  db.notifications = db.notifications.slice(0, 500);
+  // Phone push for the seller app (when Firebase is configured).
+  const tokens = (db.sellerPushTokens || []).filter((t) => t.sellerId === sellerId).map((t) => t.token);
+  if (tokens.length) growth.sendPush(tokens, { ...n, link: kind === 'question' ? '/questions' : kind === 'order' ? '/orders' : '' }).catch(() => {});
+}
+
+// ---------------- Listing details: variants, specs, highlights ----------------
+const str = (v, n) => String(v ?? '').trim().slice(0, n);
+const int = (v) => Math.max(0, Math.round(Number(v) || 0));
+/** Extra colour / storage options of a listing, each with its own price and stock. */
+function cleanVariants(vs) {
+  if (!Array.isArray(vs)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const [i, v] of vs.slice(0, 30).entries()) {
+    const x = {
+      id: str(v?.id, 24) || `V${i + 1}`,
+      color: str(v?.color, 30),
+      colorHex: Number.isInteger(v?.colorHex) ? v.colorHex : null,
+      storage: str(v?.storage, 12),
+      ram: str(v?.ram, 12),
+      price: int(v?.price),
+      mrp: int(v?.mrp),
+      stock: int(v?.stock),
+      photo: v?.photo ? str(v.photo, 300) : null,
+    };
+    if (!x.color || !x.storage || x.price < 500 || seen.has(x.id)) continue;
+    if (x.mrp < x.price) x.mrp = x.price;
+    seen.add(x.id);
+    out.push(x);
+  }
+  return out;
+}
+/** Specification rows: [{ group, k, v }]. */
+const cleanSpecs = (xs) =>
+  Array.isArray(xs)
+    ? xs
+        .slice(0, 80)
+        .map((x) => ({ group: str(x?.group, 30) || 'General', k: str(x?.k, 40), v: str(x?.v, 120) }))
+        .filter((x) => x.k && x.v)
+    : [];
+/** Feature highlight images with a caption: [{ image, title, text }]. */
+const cleanHighlights = (xs) =>
+  Array.isArray(xs)
+    ? xs
+        .slice(0, 10)
+        .map((x) => ({ image: str(x?.image, 300), title: str(x?.title, 60), text: str(x?.text, 160) }))
+        .filter((x) => x.image)
+    : [];
+/** Units across the main option and every variant. */
+const totalStock = (l) => (l.stock || 0) + (l.variants || []).reduce((t, v) => t + (v.stock || 0), 0);
+/** The option a buyer picked ('base' or missing = the main colour/storage). */
+function optionOf(l, variantId) {
+  const v = variantId && variantId !== 'base' ? (l.variants || []).find((x) => x.id === variantId) : null;
+  if (variantId && variantId !== 'base' && !v) return null;
+  return v
+    ? { variant: v, price: v.price, mrp: v.mrp, stock: v.stock, color: v.color, storage: v.storage, ram: v.ram || l.ram, photo: v.photo || l.photos[0] }
+    : { variant: null, price: l.price, mrp: l.mrp, stock: l.stock, color: l.color, storage: l.storage, ram: l.ram, photo: l.photos[0] };
 }
 const fees = (price) => (price * db.settings.commissionRate + db.settings.fixedFee) * 1.18;
 const payout = (price) => price - fees(price);
@@ -160,6 +224,7 @@ const publicListing = (l) => {
   return {
     ...l,
     imei: undefined,
+    totalStock: totalStock(l),
     seller: s ? { id: s.id, storeName: s.storeName, city: s.city, rating: s.rating, since: s.createdAt, verified: s.status === 'approved' } : null,
   };
 };
@@ -187,7 +252,15 @@ api.get('/products/:id', (req, res) => {
   res.json(publicListing(l));
 });
 
-api.get('/banners', (_, res) => res.json(db.banners.filter((b) => b.active).sort((a, b) => a.order - b.order)));
+api.get('/banners', (req, res) => {
+  const want = req.query.placement;
+  res.json(
+    db.banners
+      .filter((b) => b.active && (!want || (b.placement || 'hero') === want))
+      .filter((b) => (!b.startsAt || b.startsAt <= now()) && (!b.endsAt || b.endsAt > now()))
+      .sort((a, b) => a.order - b.order),
+  );
+});
 api.get('/coupons', (_, res) => res.json(db.coupons.filter((c) => c.active && c.expiresAt > now())));
 
 api.post('/customers/sync', (req, res) => {
@@ -296,15 +369,18 @@ api.post('/orders', (req, res) => {
   items.forEach((it, i) => {
     const l = find('listings', it.listingId);
     if (!l) return;
-    if (l.stock < (it.qty || 1)) return;
-    const { price: unit, offer } = growth.offerPrice(l, it, customer.id);
+    const opt = optionOf(l, it.variantId);
+    if (!opt || opt.stock < (it.qty || 1)) return;
+    const { price: offerUnit, offer } = growth.offerPrice(l, it, customer.id);
+    const unit = offer ? offerUnit : opt.price;
     if (offer) {
       offer.status = 'used';
       offer.events.push({ l: `Bought at ₹${unit.toLocaleString('en-IN')} • order ${orderId}`, a: now() });
     }
-    l.stock -= it.qty || 1;
+    if (opt.variant) opt.variant.stock -= it.qty || 1;
+    else l.stock -= it.qty || 1;
     l.sold = (l.sold || 0) + (it.qty || 1);
-    if (l.stock <= 0) l.status = 'soldOut';
+    if (totalStock(l) <= 0) l.status = 'soldOut';
     const o = {
       id: items.length > 1 ? `${orderId}-${i + 1}` : orderId,
       orderId,
@@ -312,10 +388,11 @@ api.post('/orders', (req, res) => {
       customerId: customer.id,
       listingId: l.id,
       item: titleOf(l),
-      variant: `${l.ram} / ${l.storage} • ${l.color}`,
-      photo: l.photos[0],
+      variant: `${opt.ram ? `${opt.ram} / ` : ''}${opt.storage} • ${opt.color}`,
+      variantId: opt.variant?.id || null,
+      photo: opt.photo,
       price: unit * (it.qty || 1),
-      listPrice: l.price,
+      listPrice: opt.price,
       offerId: offer?.id || null,
       protection: it.protection || null,
       buyer: address.fullName || customer.name,
@@ -629,6 +706,16 @@ function sellerGuard(req, res, next) {
 const seller = express.Router({ mergeParams: true });
 api.use('/seller/:sid', sellerGuard, seller);
 
+seller.post('/push/register', (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (token.length < 20) return bad(res, 400, 'token required');
+  db.sellerPushTokens ??= [];
+  db.sellerPushTokens = db.sellerPushTokens.filter((t) => t.token !== token);
+  db.sellerPushTokens.push({ sellerId: req.seller.id, token, platform: String(req.body?.platform || 'android'), at: now() });
+  save();
+  res.json({ ok: true });
+});
+
 function sellerInsights(sid) {
   const mine = db.listings.filter((l) => l.sellerId === sid);
   const brands = {};
@@ -690,9 +777,14 @@ seller.post('/listings', (req, res) => {
     const dup = db.listings.find((l) => l.imei === body.imei && l.id !== body.id && !['soldOut'].includes(l.status));
     if (dup) return bad(res, 409, `This IMEI is already listed (${dup.id})`);
   }
-  const fields = ['brand', 'model', 'ram', 'storage', 'color', 'grade', 'battery', 'imei', 'price', 'mrp', 'stock', 'warranty', 'photos', 'checks', 'accessories', 'notes', 'deviceType', 'network', 'sim', 'returnDays', 'offerPercent'];
+  const fields = ['brand', 'model', 'ram', 'storage', 'color', 'colorHex', 'grade', 'battery', 'imei', 'price', 'mrp', 'stock', 'warranty', 'photos', 'checks', 'accessories', 'notes', 'deviceType', 'network', 'sim', 'returnDays', 'offerPercent', 'series', 'description'];
   const l = existing || { id: body.id || uid('GXL'), sellerId: req.seller.id, createdAt: now(), views: 0, sold: 0, featured: false, qc: null };
   fields.forEach((f) => body[f] !== undefined && (l[f] = body[f]));
+  if (body.variants !== undefined) l.variants = cleanVariants(body.variants);
+  if (body.specs !== undefined) l.specs = cleanSpecs(body.specs);
+  if (body.highlights !== undefined) l.highlights = cleanHighlights(body.highlights);
+  // Battery health is only shown for iPhones / Apple devices (others don't report it reliably).
+  if (l.brand !== 'Apple') l.battery = null;
   l.status = submit ? 'inReview' : existing && !submit ? existing.status : 'draft';
   if (submit) {
     l.submittedAt = now();
@@ -707,14 +799,21 @@ seller.post('/listings', (req, res) => {
 seller.patch('/listings/:id', (req, res) => {
   const l = find('listings', req.params.id);
   if (!l || l.sellerId !== req.seller.id) return bad(res, 404, 'Not found');
-  const { stock, price, status } = req.body || {};
+  const { stock, price, status, variants } = req.body || {};
   const before = growth.snapshot(l);
   if (typeof price === 'number' && price > 0) l.price = Math.round(price);
-  if (typeof stock === 'number' && stock >= 0) {
-    l.stock = Math.round(stock);
-    if (l.stock === 0 && l.status === 'active') l.status = 'soldOut';
-    if (l.stock > 0 && l.status === 'soldOut') l.status = 'active';
+  if (typeof stock === 'number' && stock >= 0) l.stock = Math.round(stock);
+  // Quick price / stock edits of variants: [{ id, price?, stock? }]
+  if (Array.isArray(variants)) {
+    for (const u of variants) {
+      const v = (l.variants || []).find((x) => x.id === u?.id);
+      if (!v) continue;
+      if (typeof u.price === 'number' && u.price > 0) v.price = Math.round(u.price);
+      if (typeof u.stock === 'number' && u.stock >= 0) v.stock = Math.round(u.stock);
+    }
   }
+  if (totalStock(l) === 0 && l.status === 'active') l.status = 'soldOut';
+  if (totalStock(l) > 0 && l.status === 'soldOut') l.status = 'active';
   if (status === 'paused' && l.status === 'active') l.status = 'paused';
   if (status === 'active' && l.status === 'paused') l.status = 'active';
   growth.listingChanged(l, before);
@@ -912,7 +1011,7 @@ admin.post('/listings/:id/qc', (req, res) => {
   if (Array.isArray(defects)) l.defects = defects.slice(0, 20);
   if (decision === 'approve' && blacklisted(l.imei)) return bad(res, 409, 'This IMEI is blacklisted - reject the listing instead.');
   if (decision === 'approve') {
-    l.status = l.stock > 0 ? 'active' : 'soldOut';
+    l.status = totalStock(l) > 0 ? 'active' : 'soldOut';
     l.approvedAt = now();
     l.rejectReason = null;
     l.certificate = l.certificate || `GXC-${l.id.replace('GXL', '')}-${crypto.randomInt(1000, 9999)}`;

@@ -31,6 +31,8 @@ class ApiProductRepository implements ProductRepository {
     'vivo': 'vivo',
     'xiaomi': 'xiaomi',
     'redmi': 'xiaomi',
+    'poco': 'xiaomi',
+    'iqoo': 'vivo',
     'realme': 'realme',
     'nothing': 'nothing',
     'motorola': 'motorola',
@@ -55,6 +57,30 @@ class ApiProductRepository implements ProductRepository {
   /// Converts a server listing into a [Product] (used by seller profiles).
   Product productFromJson(Map<String, dynamic> j) => _toProduct(j);
 
+  /// Seller spec rows → the short keys the product page understands.
+  static Map<String, String> _shortSpecs(List<SpecEntry> rows) {
+    String? v(String k) {
+      for (final r in rows) {
+        if (r.key == k) return r.value;
+      }
+      return null;
+    }
+
+    final display = [
+      v('Screen size'),
+      v('Display type'),
+      v('Refresh rate'),
+    ].whereType<String>().join(', ');
+    return {
+      if (display.isNotEmpty) 'Display': display,
+      'Processor': ?v('Processor'),
+      'Rear Camera': ?v('Rear camera'),
+      'Front Camera': ?v('Front camera'),
+      'Battery': ?v('Battery capacity'),
+      'OS': ?v('Operating system'),
+    };
+  }
+
   Product _toProduct(Map<String, dynamic> j) {
     final brand = j['brand'] as String;
     final model = j['model'] as String;
@@ -65,57 +91,119 @@ class ApiProductRepository implements ProductRepository {
     final seller = j['seller'] as Map?;
     final acc = (j['accessories'] as List? ?? const []).cast<String>();
     final notes = j['notes'] as String? ?? '';
-    final checks = (j['checks'] as Map? ?? const {}).length;
+    final checks = Map<String, bool>.from(j['checks'] as Map? ?? const {});
+    final passed = checks.values.where((v) => v).length;
+    final battery = (j['battery'] as num?)?.toInt() ?? 0;
+    final specRows = [
+      for (final r in (j['specs'] as List? ?? const []))
+        SpecEntry.fromJson(r as Map<String, dynamic>),
+    ];
+    final photos = [
+      for (final p in (j['photos'] as List? ?? const []).cast<String>())
+        _image(p),
+    ];
+    final base = ProductVariant(
+      id: 'base',
+      color: j['color'] as String,
+      storage: j['storage'] as String,
+      ram: j['ram'] as String?,
+      price: (j['price'] as num).toDouble(),
+      mrp: (j['mrp'] as num?)?.toDouble() ?? (j['price'] as num).toDouble(),
+      stock: (j['stock'] as num?)?.toInt() ?? 0,
+      colorValue: (j['colorHex'] as num?)?.toInt(),
+    );
+    final extra = [
+      for (final v in (j['variants'] as List? ?? const []))
+        () {
+          final m = v as Map<String, dynamic>;
+          return ProductVariant(
+            id: m['id'] as String,
+            color: m['color'] as String,
+            storage: m['storage'] as String,
+            ram: (m['ram'] as String?)?.isNotEmpty == true
+                ? m['ram'] as String
+                : j['ram'] as String?,
+            price: (m['price'] as num).toDouble(),
+            mrp: (m['mrp'] as num?)?.toDouble() ?? (m['price'] as num).toDouble(),
+            stock: (m['stock'] as num?)?.toInt() ?? 0,
+            colorValue: (m['colorHex'] as num?)?.toInt(),
+            image: m['photo'] == null ? null : _image(m['photo'] as String),
+          );
+        }(),
+    ];
+    final total =
+        (j['totalStock'] as num?)?.toInt() ??
+        base.stock + extra.fold<int>(0, (t, v) => t + v.stock);
+    // Start on the main option when it is in stock, else the first that is.
+    final start = base.stock > 0
+        ? base
+        : extra.firstWhere((v) => v.stock > 0, orElse: () => base);
+    final device = j['deviceType'] as String? ?? 'Mobile Phone';
     return Product(
       id: j['id'] as String,
       name: name,
       brand: brand,
-      categoryId: _brandToCategory[brand.toLowerCase()] ?? 'apple',
+      categoryId: _brandToCategory[brand.toLowerCase()] ?? 'others',
       description: [
         'Certified pre-owned $brand $model in ${_grades[j['grade']]?.toLowerCase() ?? 'great condition'}.',
-        'Battery health ${j['battery']}%. Passed all $checks GAMEX function checks and IMEI verification.',
+        if (battery > 0) 'Battery health $battery%.',
+        if (checks.isNotEmpty)
+          '$passed of ${checks.length} function checks passed, IMEI / serial verified by GAMEX.',
+        if ((j['description'] as String?)?.isNotEmpty == true)
+          j['description'] as String,
         if (notes.isNotEmpty) 'Seller note: $notes.',
         if (acc.isNotEmpty) 'In the box: ${acc.join(', ')}.',
       ].join(' '),
-      price: (j['price'] as num).toDouble(),
-      oldPrice: (j['mrp'] as num?)?.toDouble(),
-      images: [
-        for (final p in (j['photos'] as List? ?? const []).cast<String>())
-          _image(p),
-      ],
+      price: start.price,
+      oldPrice: start.mrp,
+      images: photos,
       rating: (seller?['rating'] as num?)?.toDouble() ?? 4.6,
       reviewCount: (j['sold'] as num?)?.toInt() ?? 0,
-      stock: (j['stock'] as num?)?.toInt() ?? 0,
+      stock: total,
       isFeatured: j['featured'] == true,
-      variant: '${j['storage']} • ${j['color']}',
+      variant: '${start.storage} • ${start.color}',
       condition: _grades[j['grade']],
       warrantyMonths: (j['warranty'] as num?)?.toInt() ?? 0,
       verified: true,
-      ram: j['ram'] as String?,
-      batteryHealth: (j['battery'] as num?)?.toInt() ?? 0,
+      ram: start.ram,
+      batteryHealth: battery,
       soldCount: (j['sold'] as num?)?.toInt() ?? 0,
       sellerId: seller?['id'] as String?,
       sellerName: seller?['storeName'] as String?,
       sellerCity: seller?['city'] as String?,
       certificate: j['certificate'] as String?,
-      checks: Map<String, bool>.from(j['checks'] as Map? ?? const {}),
+      checks: checks,
       defects: [
         for (final d in (j['defects'] as List? ?? const []))
           PhotoDefect.fromJson(d as Map<String, dynamic>),
       ],
       returnDays: (j['returnDays'] as num?)?.toInt() ?? 7,
+      variants: [base, ...extra],
+      variantId: start.id,
+      deviceType: device,
+      highlights: [
+        for (final h in (j['highlights'] as List? ?? const []))
+          ProductHighlight(
+            image: _image((h as Map)['image'] as String),
+            title: h['title'] as String? ?? '',
+            text: h['text'] as String? ?? '',
+          ),
+      ],
+      specRows: specRows,
       specs: {
         'Sold by':
             '${seller?['storeName'] ?? 'GAMEX Seller'}, ${seller?['city'] ?? ''}',
         'Memory': '${j['ram']} RAM • ${j['storage']}',
         'Colour': j['color'] as String,
-        'Battery health': '${j['battery']}%',
+        if (battery > 0) 'Battery health': '$battery%',
+        if (j['network'] != null) 'Network': j['network'] as String,
         if (j['certificate'] != null)
           'GAMEX certificate': j['certificate'] as String,
         'Warranty': (j['warranty'] as num? ?? 0) == 0
             ? 'No warranty'
             : '${j['warranty']} months seller warranty',
         if (acc.isNotEmpty) 'In the box': acc.join(', '),
+        ..._shortSpecs(specRows),
       },
     );
   }
@@ -141,7 +229,10 @@ class ApiProductRepository implements ProductRepository {
   @override
   Future<List<PromoBanner>> banners() async {
     try {
-      final list = (await _api.get('/banners') as List).cast<Map>();
+      final list = [
+        for (final b in (await _api.get('/banners') as List).cast<Map>())
+          if ((b['placement'] ?? 'hero') == 'hero') b,
+      ];
       if (list.isEmpty) return await _mock.banners();
       final defaults = MockData.banners;
       return [

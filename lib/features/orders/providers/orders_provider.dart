@@ -125,6 +125,7 @@ class OrdersNotifier extends Notifier<List<Order>> {
         for (final i in sellerItems)
           {
             'listingId': i.product.id,
+            'variantId': ?i.product.variantId,
             'qty': i.quantity,
             if (i.offerId != null && !i.offerId!.startsWith('LOF'))
               'offerId': i.offerId,

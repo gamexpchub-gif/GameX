@@ -35,10 +35,10 @@ class _ListingsScreenState extends ConsumerState<ListingsScreen> {
         .toList();
     final units = all
         .where((l) => l.status == ListingStatus.active)
-        .fold<int>(0, (s, l) => s + l.stock);
+        .fold<int>(0, (s, l) => s + l.totalStock);
     final value = all
         .where((l) => l.status == ListingStatus.active)
-        .fold<int>(0, (s, l) => s + l.stock * l.price);
+        .fold<int>(0, (s, l) => s + l.stock * l.price + l.variants.fold<int>(0, (t, v) => t + v.stock * v.price));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Listings')),
@@ -304,6 +304,17 @@ class _ListingCard extends ConsumerWidget {
             children: [
               _Metric(Icons.visibility_outlined, '${l.views}'),
               _Metric(Icons.shopping_bag_outlined, '${l.sold} sold'),
+              if (l.variants.isNotEmpty)
+                GestureDetector(
+                  onTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    builder: (_) => _VariantStock(id: l.id),
+                  ),
+                  child: _Metric(
+                    Icons.style_outlined,
+                    '${l.variants.length + 1} options',
+                  ),
+                ),
               const Spacer(),
               _Stepper(
                 value: l.stock,
@@ -515,6 +526,77 @@ Future<int?> _askPrice(BuildContext context, int current) {
           },
           child: const Text('Update'),
         ),
+      ],
+    ),
+  );
+}
+
+/// Stock of every colour / storage option of one listing.
+class _VariantStock extends ConsumerWidget {
+  const _VariantStock({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = ref.watch(listingByIdProvider(id));
+    if (l == null) return const SizedBox.shrink();
+    final n = ref.read(syncProvider.notifier);
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        children: [
+          Text(
+            l.title,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+          ),
+          Text(
+            '${l.totalStock} units across ${l.variants.length + 1} options',
+            style: const TextStyle(color: C.muted),
+          ),
+          const SizedBox(height: 12),
+          _row(
+            '${l.variant} • ${l.color}',
+            l.price,
+            l.stock,
+            (v) => runAction(context, () => n.setStock(l.id, v)),
+            main: true,
+          ),
+          for (final v in l.variants)
+            _row(
+              v.label,
+              v.price,
+              v.stock,
+              (s) => runAction(context, () => n.setVariantStock(l.id, v.id, s)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(
+    String label,
+    int price,
+    int stock,
+    ValueChanged<int> set, {
+    bool main = false,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                main ? '$label  (main)' : label,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(inr(price), style: const TextStyle(color: C.muted)),
+            ],
+          ),
+        ),
+        _Stepper(value: stock, onChanged: set),
       ],
     ),
   );

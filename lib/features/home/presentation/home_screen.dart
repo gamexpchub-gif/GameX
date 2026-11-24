@@ -13,6 +13,7 @@ import '../../commerce/services/notification_service.dart';
 import '../../discover/presentation/widgets/home_discover.dart';
 import 'widgets/design_scale.dart';
 import 'widgets/hero_banner.dart';
+import 'widgets/promo_cards.dart';
 import 'widgets/home_compact.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_sections.dart';
@@ -46,6 +47,7 @@ class HomeScreen extends ConsumerWidget {
 
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(bannersProvider);
+    ref.invalidate(promoCardsProvider);
     ref.invalidate(categoriesProvider);
     ref.invalidate(allProductsProvider);
     await ref.read(allProductsProvider.future);
@@ -112,6 +114,8 @@ class HomeScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(child: SaleStrip()),
                   SliverToBoxAdapter(child: SizedBox(height: 26 * k)),
                   const SliverToBoxAdapter(child: ForYouRail()),
+                  SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
+                  const SliverToBoxAdapter(child: PromoCardsCarousel()),
                   SliverToBoxAdapter(child: SizedBox(height: 22 * k)),
                   SliverToBoxAdapter(
                     child: HomeSectionTitle(

@@ -178,7 +178,8 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
     final grade = (p.condition ?? 'Excellent').replaceAll(' Condition', '');
     const grades = ['Good', 'Excellent', 'Like New'];
     final gi = grades.indexOf(grade).clamp(0, 2);
-    final battery = p.batteryHealth == 0 ? 90 : p.batteryHealth;
+    final battery = p.batteryHealth;
+    final okChecks = p.checks.values.where((v) => v).length;
     final rows = [
       (
         Icons.smartphone_rounded,
@@ -194,12 +195,21 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
           _ => 'Light visible wear on frame',
         },
       ),
+      if (battery > 0)
+        (
+          Icons.battery_charging_full_rounded,
+          'Battery health',
+          '$battery% of original capacity',
+        ),
       (
-        Icons.battery_charging_full_rounded,
-        'Battery health',
-        '$battery% of original capacity',
+        Icons.check_circle_outline_rounded,
+        'Functions',
+        p.checks.isEmpty
+            ? 'All 52 checks passed'
+            : okChecks == p.checks.length
+            ? 'All ${p.checks.length} checks passed'
+            : '$okChecks of ${p.checks.length} working • see report',
       ),
-      (Icons.check_circle_outline_rounded, 'Functions', 'All 52 checks passed'),
     ];
     return _card(
       child: Column(
@@ -573,12 +583,14 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
 
   // ── GAMEX Certified ──
   Widget _certified() {
-    final battery = p.batteryHealth == 0 ? 90 : p.batteryHealth;
+    final battery = p.batteryHealth;
+    final okChecks = p.checks.values.where((v) => v).length;
     final checks = [
-      'Battery Health $battery%',
+      if (battery > 0) 'Battery Health $battery%',
+      if (p.checks.isNotEmpty) '$okChecks/${p.checks.length} Functions Working',
       'Display & Touch - 100%',
       'Camera - Verified',
-      'All Functions - Working',
+      if (p.checks.isEmpty) 'All Functions - Working',
     ];
     final cam = widget.heroVariant;
     return Padding(
@@ -707,6 +719,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
 
   // ── Highlights ──
   Widget _highlights() {
+    if (p.highlights.isNotEmpty) return _photoHighlights();
     final s = p.specs;
     final display = s['Display'] ?? '';
     final items = [
@@ -765,6 +778,100 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
             ),
         ],
       ),
+    );
+  }
+
+  /// Seller's highlight photos: big swipeable cards with captions.
+  Widget _photoHighlights() {
+    final hs = p.highlights;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 38 * d),
+          child: Text('Product Highlights', style: _h),
+        ),
+        SizedBox(height: 16 * d),
+        SizedBox(
+          height: 470 * d,
+          child: PageView.builder(
+            controller: PageController(viewportFraction: 0.88),
+            padEnds: false,
+            itemCount: hs.length,
+            itemBuilder: (_, i) {
+              final h = hs[i];
+              return Padding(
+                padding: EdgeInsets.only(
+                  left: i == 0 ? 19 * d : 8 * d,
+                  right: 8 * d,
+                ),
+                child: GestureDetector(
+                  onTap: () => openMediaViewer(context, [
+                    for (final x in hs) ReviewMedia(x.image),
+                  ], i),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30 * d),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AppImage(h.image),
+                        if (h.title.isNotEmpty || h.text.isNotEmpty)
+                          Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.fromLTRB(
+                                28 * d,
+                                60 * d,
+                                28 * d,
+                                24 * d,
+                              ),
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Color(0xCC0B0820),
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (h.title.isNotEmpty)
+                                    Text(
+                                      h.title,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 30 * d,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  if (h.text.isNotEmpty)
+                                    Text(
+                                      h.text,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 21 * d,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -910,6 +1017,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
 
   // ── Specifications ──
   Widget _specs() {
+    if (p.specRows.isNotEmpty) return _groupedSpecs();
     final s = p.specs;
     final rows = <(IconData, String, String)>[
       (Icons.sell_outlined, 'Brand', p.brand),
@@ -938,11 +1046,12 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         'Condition',
         (p.condition ?? 'Excellent').replaceAll(' Condition', ''),
       ),
-      (
-        Icons.battery_full_rounded,
-        'Battery health',
-        '${p.batteryHealth == 0 ? 90 : p.batteryHealth}%',
-      ),
+      if (p.batteryHealth > 0 || !p.isMarketplace)
+        (
+          Icons.battery_full_rounded,
+          'Battery health',
+          '${p.batteryHealth == 0 ? 90 : p.batteryHealth}%',
+        ),
       (Icons.qr_code_2_rounded, 'IMEI status', 'Clean • Blacklist-free'),
       (Icons.gpp_good_outlined, 'Warranty', '${p.warrantyMonths} months GAMEX'),
     ];
@@ -1007,6 +1116,92 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
     'Battery' => Icons.battery_charging_full_rounded,
     _ => Icons.settings_suggest_outlined,
   };
+
+  /// Seller's specifications grouped by section (Display, Camera…).
+  Widget _groupedSpecs() {
+    final general = <SpecEntry>[
+      SpecEntry('General', 'Brand', p.brand),
+      SpecEntry('General', 'Model', p.name),
+      if (p.ram != null) SpecEntry('General', 'RAM', p.ram!),
+      if (p.storage != null) SpecEntry('General', 'Storage', p.storage!),
+      if (p.colorName != null) SpecEntry('General', 'Colour', p.colorName!),
+      if (p.specs['Network'] != null)
+        SpecEntry('General', 'Network', p.specs['Network']!),
+      if (p.batteryHealth > 0)
+        SpecEntry('General', 'Battery health', '${p.batteryHealth}%'),
+    ];
+    final groups = <String, List<SpecEntry>>{};
+    for (final r in [...general, ...p.specRows]) {
+      (groups[r.group] ??= []).add(r);
+    }
+    final entries = groups.entries.toList();
+    final shown = _specsOpen ? entries : entries.take(2).toList();
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _title(Icons.fact_check_outlined, 'Specifications'),
+          for (final g in shown) ...[
+            SizedBox(height: 22 * d),
+            Text(
+              g.key.toUpperCase(),
+              style: TextStyle(
+                fontSize: 19 * d,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w800,
+                color: HomeColors.blue,
+              ),
+            ),
+            SizedBox(height: 8 * d),
+            for (var i = 0; i < g.value.length; i++)
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 18 * d,
+                  vertical: 16 * d,
+                ),
+                decoration: BoxDecoration(
+                  color: i.isEven ? const Color(0xFFF1F5FF) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14 * d),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 240 * d,
+                      child: Text(
+                        g.value[i].key,
+                        style: TextStyle(
+                          fontSize: 22 * d,
+                          fontWeight: FontWeight.w600,
+                          color: HomeColors.ink,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        g.value[i].value,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 22 * d,
+                          color: HomeColors.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (entries.length > 2) ...[
+            SizedBox(height: 20 * d),
+            _wideButton(
+              _specsOpen ? 'Show Less' : 'View All ${entries.length} Sections',
+              () => setState(() => _specsOpen = !_specsOpen),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   // ── What's in the box ──
   Widget _inTheBox() {
