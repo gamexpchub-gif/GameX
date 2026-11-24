@@ -34,7 +34,6 @@ import '../../features/support/presentation/ticket_screens.dart';
 import '../../features/service/presentation/setup_screen.dart';
 import '../../features/service/presentation/tracking_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
-import '../../features/splash/presentation/splash_screen.dart';
 import '../../features/trust/presentation/certificate_screen.dart';
 import '../../features/trust/presentation/imei_check_screen.dart';
 import '../../features/trust/presentation/inspection_report_screen.dart';
@@ -49,9 +48,10 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
-  initialLocation: '/splash',
+  // Open straight on Home; sign-in is asked only where it's needed.
+  initialLocation: '/home',
   routes: [
-    GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+    GoRoute(path: '/splash', redirect: (_, _) => '/home'),
     GoRoute(
       path: '/login',
       builder: (_, s) => LoginScreen(redirectTo: s.uri.queryParameters['from']),
