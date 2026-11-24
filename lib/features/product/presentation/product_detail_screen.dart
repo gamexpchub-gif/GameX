@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -372,7 +371,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     final d = context.d;
     final mq = MediaQuery.of(context);
     return MediaQuery(
-      data: mq.copyWith(textScaler: TextScaler.noScaling),
+      data: mq.copyWith(textScaler: const TextScaler.linear(1.15)),
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark.copyWith(
           statusBarColor: Colors.transparent,
@@ -392,32 +391,34 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                 SliverToBoxAdapter(child: _titleBlock(d)),
                 SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
                 SliverToBoxAdapter(child: _priceCard(d)),
+                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                // Pick the exact phone first: colour + storage, then trust.
+                SliverToBoxAdapter(child: _options(d)),
+                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                SliverToBoxAdapter(child: _features(d)),
                 SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 19 * d),
                     child: Column(
                       children: [
+                        PdpCommerceSection(product: p, price: _price),
+                        const SizedBox(height: 10),
                         FairPriceMeter(product: p, price: _price),
                         const SizedBox(height: 10),
                         PdpDiscoverActions(product: p),
-                        const SizedBox(height: 10),
-                        PdpCommerceSection(product: p, price: _price),
                       ],
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
-                SliverToBoxAdapter(child: _emiCard(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 26 * d)),
-                SliverToBoxAdapter(child: _options(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
-                SliverToBoxAdapter(child: _features(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
-                SliverToBoxAdapter(child: _quickLinks(d)),
                 SliverToBoxAdapter(child: SizedBox(height: 26 * d)),
                 SliverToBoxAdapter(
-                  child: PdpSections(
+                  // Detail sections use smaller design sizes: read larger.
+                  child: MediaQuery(
+                    data: mq.copyWith(
+                      textScaler: const TextScaler.linear(1.28),
+                    ),
+                    child: PdpSections(
                     product: p,
                     price: _price,
                     variantLabel: _variantLabel,
@@ -425,6 +426,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                     highlightsKey: _highlightsKey,
                     specsKey: _specsKey,
                     reviewsKey: _reviewsKey,
+                  ),
                   ),
                 ),
                 SliverToBoxAdapter(child: SizedBox(height: 40 * d)),
@@ -1025,70 +1027,6 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     );
   }
 
-  Widget _emiCard(double d) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 19 * d),
-      child: GestureDetector(
-        onTap: () => showEmiSheet(context),
-        child: Glass(
-          radius: 30 * d,
-          color: Colors.white.withValues(alpha: 0.9),
-          child: SizedBox(
-            height: 84 * d,
-            child: Row(
-              children: [
-                SizedBox(width: 40 * d),
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 54 * d,
-                  color: HomeColors.blue,
-                ),
-                SizedBox(width: 26 * d),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'EMI from ${formatPrice((_price / 20).roundToDouble())}/month',
-                        style: TextStyle(
-                          fontSize: 25 * d,
-                          fontWeight: FontWeight.w700,
-                          color: HomeColors.ink,
-                        ),
-                      ),
-                      Text(
-                        'No Cost EMI Available',
-                        style: TextStyle(
-                          fontSize: 21 * d,
-                          color: HomeColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  'View Plans',
-                  style: TextStyle(
-                    fontSize: 24 * d,
-                    fontWeight: FontWeight.w600,
-                    color: HomeColors.blue,
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 36 * d,
-                  color: HomeColors.blue,
-                ),
-                SizedBox(width: 26 * d),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // ── Colour + storage (side by side, as in the design) ──
   Widget _options(double d) {
     TextStyle label() => TextStyle(
@@ -1275,110 +1213,6 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
                           fontWeight: FontWeight.w600,
                           color: HomeColors.ink,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _quickLinks(double d) {
-    final total = NumberFormat.decimalPattern('en_IN')
-        .format(ref.watch(ratingSummaryProvider(p.id)).total);
-    final rows = [
-      (
-        Icons.description_outlined,
-        'Product Highlights',
-        'Key features, what\'s in the box',
-        _highlightsKey,
-      ),
-      (
-        Icons.settings_outlined,
-        'Specifications',
-        'Detailed technical information',
-        _specsKey,
-      ),
-      (
-        Icons.star_border_rounded,
-        'Ratings & Reviews ($total)',
-        'Real customer feedback with photos',
-        _reviewsKey,
-      ),
-    ];
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 19 * d),
-      child: Glass(
-        radius: 30 * d,
-        color: Colors.white.withValues(alpha: 0.9),
-        padding: EdgeInsets.symmetric(vertical: 6 * d),
-        child: Column(
-          children: [
-            for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) Divider(height: 1, indent: 120 * d, endIndent: 30 * d),
-              InkWell(
-                onTap: () {
-                  final c = rows[i].$4.currentContext;
-                  if (c != null) {
-                    Scrollable.ensureVisible(
-                      c,
-                      duration: const Duration(milliseconds: 450),
-                      curve: Curves.easeOutCubic,
-                      alignment: 0.04,
-                    );
-                  }
-                },
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 20 * d,
-                    vertical: 14 * d,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 72 * d,
-                        height: 72 * d,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE9EFFF),
-                          borderRadius: BorderRadius.circular(20 * d),
-                        ),
-                        child: Icon(
-                          rows[i].$1,
-                          size: 40 * d,
-                          color: HomeColors.blue,
-                        ),
-                      ),
-                      SizedBox(width: 28 * d),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              rows[i].$2,
-                              style: TextStyle(
-                                fontSize: 27 * d,
-                                fontWeight: FontWeight.w700,
-                                color: HomeColors.ink,
-                              ),
-                            ),
-                            Text(
-                              rows[i].$3,
-                              style: TextStyle(
-                                fontSize: 22 * d,
-                                color: HomeColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 40 * d,
-                        color: HomeColors.ink,
                       ),
                     ],
                   ),

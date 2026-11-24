@@ -139,16 +139,12 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         if (p.isMarketplace) ...[ProductTrustCard(product: p), _gap],
         _liveCard(),
         _gap,
-        _deliverTo(),
-        SizedBox(height: 14 * d),
         _freeDelivery(),
         SizedBox(height: 14 * d),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 19 * d),
           child: DeliveryCheckCard(product: p, price: widget.price),
         ),
-        _gap,
-        _certified(),
         _gap,
         KeyedSubtree(key: widget.highlightsKey, child: _highlights()),
         _gap,
@@ -453,70 +449,6 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
     );
   }
 
-  // ── Delivery ──
-  Widget _deliverTo() {
-    final a = ref.watch(addressBookProvider).current;
-    return _card(
-      padding: EdgeInsets.symmetric(horizontal: 28 * d, vertical: 22 * d),
-      child: Row(
-        children: [
-          Icon(
-            Icons.location_on_outlined,
-            size: 42 * d,
-            color: HomeColors.blue,
-          ),
-          SizedBox(width: 18 * d),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  a == null
-                      ? 'Select delivery location'
-                      : 'Deliver to ${a.area}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _t.copyWith(fontSize: 24 * d),
-                ),
-                Text(
-                  a == null
-                      ? 'Add your address to see delivery date'
-                      : '${a.details}, ${a.city}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _s,
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => a == null
-                ? showAddressForm(context)
-                : showAddressPicker(context),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 22 * d,
-                vertical: 10 * d,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE6EDFF),
-                borderRadius: BorderRadius.circular(22 * d),
-              ),
-              child: Text(
-                a == null ? 'Add' : 'Change',
-                style: TextStyle(
-                  fontSize: 22 * d,
-                  fontWeight: FontWeight.w700,
-                  color: HomeColors.blue,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _freeDelivery() {
     final city = ref.watch(addressBookProvider).current?.city ?? 'Mumbai';
     final pin = lookupPin(ref.watch(deliveryPinProvider) ?? '');
@@ -577,142 +509,6 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
             color: HomeColors.blue,
           ),
         ],
-      ),
-    );
-  }
-
-  // ── GAMEX Certified ──
-  Widget _certified() {
-    final battery = p.batteryHealth;
-    final okChecks = p.checks.values.where((v) => v).length;
-    final checks = [
-      if (battery > 0) 'Battery Health $battery%',
-      if (p.checks.isNotEmpty) '$okChecks/${p.checks.length} Functions Working',
-      'Display & Touch - 100%',
-      'Camera - Verified',
-      if (p.checks.isEmpty) 'All Functions - Working',
-    ];
-    final cam = widget.heroVariant;
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 19 * d),
-      child: GestureDetector(
-        onTap: () => showConditionReport(context, p),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32 * d),
-          child: Container(
-            height: 410 * d,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF0E1033),
-                  Color(0xFF2A1466),
-                  Color(0xFF5B2DB8),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Stack(
-              children: [
-                if (cam != null)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 360 * d,
-                    child: ShaderMask(
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (r) => const LinearGradient(
-                        colors: [Colors.transparent, Colors.black],
-                        stops: [0, 0.45],
-                      ).createShader(r),
-                      child: Image.asset(
-                        '$_img/pdp_cam_$cam.jpg',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(32 * d, 30 * d, 24 * d, 26 * d),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Image.asset(
-                            '$_img/icon_certified.png',
-                            width: 76 * d,
-                            height: 80 * d,
-                          ),
-                          SizedBox(width: 18 * d),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'GAMEX Certified',
-                                style: TextStyle(
-                                  fontSize: 36 * d,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              Text(
-                                'Tested  •  Verified  •  Trusted',
-                                style: TextStyle(
-                                  fontSize: 21 * d,
-                                  color: Colors.white70,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      for (final c in checks)
-                        Padding(
-                          padding: EdgeInsets.only(bottom: 12 * d),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 32 * d,
-                                height: 32 * d,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF22C55E),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.check_rounded,
-                                  size: 22 * d,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(width: 16 * d),
-                              Text(
-                                c,
-                                style: TextStyle(
-                                  fontSize: 24 * d,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      Text(
-                        'Tap to view full condition report  ›',
-                        style: TextStyle(
-                          fontSize: 19 * d,
-                          color: const Color(0xFFB9C7FF),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1488,7 +1284,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
         ),
         SizedBox(height: 20 * d),
         SizedBox(
-          height: 470 * d,
+          height: 520 * d,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: 19 * d),
