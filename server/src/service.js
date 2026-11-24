@@ -73,6 +73,10 @@ export async function createShiprocketShipment(o, seller) {
   try {
     const token = await shiprocketToken();
     if (!token) return null;
+    if (!/^\d{6}$/.test(String(o.pincode || ''))) {
+      console.warn('[shiprocket] order', o.id, 'has no PIN code - book manually');
+      return null;
+    }
     const h = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
     const [first, ...rest] = String(o.buyer || 'Customer').split(' ');
     const created = await (
@@ -87,8 +91,8 @@ export async function createShiprocketShipment(o, seller) {
           billing_last_name: rest.join(' ') || '.',
           billing_address: o.address || o.city,
           billing_city: o.city,
-          billing_pincode: o.pincode || '400001',
-          billing_state: stateOf(o.city) || o.city,
+          billing_pincode: o.pincode,
+          billing_state: o.state || stateOf(o.city) || o.city,
           billing_country: 'India',
           billing_email: 'orders@gamex.in',
           billing_phone: String(o.phone || '').replace(/\D/g, '').slice(-10),

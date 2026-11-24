@@ -31,6 +31,11 @@ class Address {
     required this.area,
     required this.details,
     this.label = 'Home',
+    this.pincode = '',
+    this.state = '',
+    this.landmark = '',
+    this.lat,
+    this.lng,
   });
 
   /// "Home", "Office" or "Other".
@@ -39,17 +44,38 @@ class Address {
   final String phone;
   final String city;
   final String area;
-  final String details;
 
-  String get oneLine => '$details, $area, $city';
+  /// House / flat, building and street.
+  final String details;
+  final String pincode;
+  final String state;
+  final String landmark;
+
+  /// Map position when picked with "Use my current location".
+  final double? lat;
+  final double? lng;
+
+  String get oneLine => [
+    details,
+    if (landmark.isNotEmpty) 'near $landmark',
+    area,
+    city,
+    if (state.isNotEmpty && pincode.isNotEmpty) '$state $pincode'
+    else if (pincode.isNotEmpty) pincode,
+  ].where((s) => s.trim().isNotEmpty).join(', ');
 
   factory Address.fromJson(Map<String, dynamic> json) => Address(
-    fullName: json['fullName'] as String,
-    phone: json['phone'] as String,
-    city: json['city'] as String,
-    area: json['area'] as String,
-    details: json['details'] as String,
+    fullName: json['fullName'] as String? ?? '',
+    phone: json['phone'] as String? ?? '',
+    city: json['city'] as String? ?? '',
+    area: json['area'] as String? ?? '',
+    details: json['details'] as String? ?? '',
     label: json['label'] as String? ?? 'Home',
+    pincode: json['pincode'] as String? ?? '',
+    state: json['state'] as String? ?? '',
+    landmark: json['landmark'] as String? ?? '',
+    lat: (json['lat'] as num?)?.toDouble(),
+    lng: (json['lng'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +85,11 @@ class Address {
     'area': area,
     'details': details,
     'label': label,
+    'pincode': pincode,
+    'state': state,
+    'landmark': landmark,
+    'lat': ?lat,
+    'lng': ?lng,
   };
 
   @override
@@ -69,10 +100,12 @@ class Address {
       other.city == city &&
       other.area == area &&
       other.details == details &&
-      other.label == label;
+      other.label == label &&
+      other.pincode == pincode;
 
   @override
-  int get hashCode => Object.hash(fullName, phone, city, area, details, label);
+  int get hashCode =>
+      Object.hash(fullName, phone, city, area, details, label, pincode);
 }
 
 class Order {

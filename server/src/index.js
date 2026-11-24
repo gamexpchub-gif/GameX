@@ -255,6 +255,47 @@ api.get('/products/:id', (req, res) => {
   res.json(publicListing(l));
 });
 
+// PIN code → district, state and post-office areas (India Post), cached.
+const pinInflight = new Map();
+api.get('/pincode/:pin', async (req, res) => {
+  const pin = String(req.params.pin || '');
+  if (!/^[1-9]\d{5}$/.test(pin)) return bad(res, 400, 'Enter a valid 6-digit PIN code');
+  db.pinCache ??= [];
+  const hit = db.pinCache.find((x) => x.id === pin);
+  if (hit && Date.now() - Date.parse(hit.at) < 90 * 864e5) return res.json(hit);
+  try {
+    let p = pinInflight.get(pin);
+    if (!p) {
+      p = (async () => {
+        const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(6000) });
+        const j = await r.json();
+        const offices = j?.[0]?.Status === 'Success' ? j[0].PostOffice || [] : [];
+        if (!offices.length) return null;
+        const first = offices[0];
+        const v = {
+          id: pin,
+          pin,
+          district: first.District,
+          state: first.State,
+          areas: [...new Set(offices.map((o) => o.Name))].slice(0, 30),
+          deliverable: offices.some((o) => o.DeliveryStatus === 'Delivery'),
+          at: now(),
+        };
+        db.pinCache = [v, ...db.pinCache.filter((x) => x.id !== pin)].slice(0, 5000);
+        save();
+        return v;
+      })().finally(() => pinInflight.delete(pin));
+      pinInflight.set(pin, p);
+    }
+    const v = await p;
+    if (!v) return bad(res, 404, 'This PIN code does not exist');
+    res.json(v);
+  } catch {
+    if (hit) return res.json(hit);
+    bad(res, 503, 'PIN lookup is unavailable right now');
+  }
+});
+
 api.get('/banners', (req, res) => {
   const want = req.query.placement;
   res.json(
@@ -400,9 +441,11 @@ api.post('/orders', (req, res) => {
       protection: it.protection || null,
       buyer: address.fullName || customer.name,
       phone: address.phone || customer.phone || '',
-      address: address.details ? `${address.details}, ${address.area || ''}` : '',
+      address: address.details ? [address.details, address.landmark ? `near ${address.landmark}` : '', address.area].filter(Boolean).join(', ') : '',
       city: address.city || '',
+      state: address.state || '',
       pincode: address.pincode || '',
+      geo: Number.isFinite(address.lat) && Number.isFinite(address.lng) ? { lat: address.lat, lng: address.lng } : null,
       payment,
       paymentId: payment !== 'COD' ? req.body.paymentRef || null : null,
       stage: 'newOrder',

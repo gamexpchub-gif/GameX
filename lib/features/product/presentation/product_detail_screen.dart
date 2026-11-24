@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -155,6 +156,40 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   final _highlightsKey = GlobalKey();
   final _specsKey = GlobalKey();
   final _reviewsKey = GlobalKey();
+  final _optionsKey = GlobalKey();
+  final _scroll = ScrollController();
+
+  /// Section tabs appear once the buyer scrolls past the price.
+  final _tabsVisible = ValueNotifier<bool>(false);
+  final _activeTab = ValueNotifier<int>(0);
+
+  void _onScroll() {
+    _tabsVisible.value = _scroll.offset > 520;
+    // The last section whose top has passed under the tab bar is active.
+    final keys = [_optionsKey, _highlightsKey, _specsKey, _reviewsKey];
+    var active = 0;
+    for (var i = 0; i < keys.length; i++) {
+      final box = keys[i].currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      if (box.localToGlobal(Offset.zero).dy < 160) active = i;
+    }
+    _activeTab.value = active;
+  }
+
+  void _jump(int i) {
+    final key = [_optionsKey, _highlightsKey, _specsKey, _reviewsKey][i];
+    final ctx = key.currentContext;
+    if (ctx == null) return;
+    HapticFeedback.selectionClick();
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+      alignment: 0.08,
+    );
+  }
+
   int _page = 0;
   int _color = 0;
   late int _storage;
@@ -247,10 +282,10 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     if (_real && _optionAt(i, s) == null) {
       s = List.generate(_storages.length, (k) => k).firstWhere(
         (k) => _available(i, k),
-        orElse: () => List.generate(_storages.length, (k) => k).firstWhere(
-          (k) => _optionAt(i, k) != null,
-          orElse: () => s,
-        ),
+        orElse: () => List.generate(
+          _storages.length,
+          (k) => k,
+        ).firstWhere((k) => _optionAt(i, k) != null, orElse: () => s),
       );
     }
     setState(() {
@@ -265,10 +300,10 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
     if (_real && _optionAt(c, i) == null) {
       c = List.generate(_colors.length, (k) => k).firstWhere(
         (k) => _available(k, i),
-        orElse: () => List.generate(_colors.length, (k) => k).firstWhere(
-          (k) => _optionAt(k, i) != null,
-          orElse: () => c,
-        ),
+        orElse: () => List.generate(
+          _colors.length,
+          (k) => k,
+        ).firstWhere((k) => _optionAt(k, i) != null, orElse: () => c),
       );
     }
     setState(() {
@@ -319,6 +354,7 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _storage = _baseStorage;
     if (_real) {
       final start = p.variants.firstWhere(
@@ -328,7 +364,9 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
       _color = _colors
           .indexWhere((c) => c.name.toLowerCase() == start.color.toLowerCase())
           .clamp(0, _colors.length - 1);
-      _storage = _storages.indexOf(start.storage).clamp(0, _storages.length - 1);
+      _storage = _storages
+          .indexOf(start.storage)
+          .clamp(0, _storages.length - 1);
     }
     Future.microtask(() => ref.read(recentlyViewedProvider.notifier).record(p));
   }
@@ -336,6 +374,9 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
   @override
   void dispose() {
     _gallery.dispose();
+    _scroll.dispose();
+    _tabsVisible.dispose();
+    _activeTab.dispose();
     super.dispose();
   }
 
@@ -379,57 +420,91 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
         child: Scaffold(
           backgroundColor: const Color(0xFFF1F4FD),
           body: AuroraBackground(
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: SizedBox(height: mq.padding.top)),
-                SliverToBoxAdapter(child: _Header(product: p)),
-                SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
-                SliverToBoxAdapter(child: _hero(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 16 * d)),
-                SliverToBoxAdapter(child: _thumbs(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
-                SliverToBoxAdapter(child: _titleBlock(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
-                SliverToBoxAdapter(child: _priceCard(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
-                // Pick the exact phone first: colour + storage, then trust.
-                SliverToBoxAdapter(child: _options(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
-                SliverToBoxAdapter(child: _features(d)),
-                SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 19 * d),
-                    child: Column(
-                      children: [
-                        PdpCommerceSection(product: p, price: _price),
-                        const SizedBox(height: 10),
-                        FairPriceMeter(product: p, price: _price),
-                        const SizedBox(height: 10),
-                        PdpDiscoverActions(product: p),
-                      ],
+            child: Stack(
+              children: [
+                CustomScrollView(
+                  controller: _scroll,
+                  slivers: [
+                    SliverToBoxAdapter(child: SizedBox(height: mq.padding.top)),
+                    SliverToBoxAdapter(child: _Header(product: p)),
+                    SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
+                    SliverToBoxAdapter(child: _hero(d)),
+                    SliverToBoxAdapter(child: SizedBox(height: 16 * d)),
+                    SliverToBoxAdapter(child: _thumbs(d)),
+                    SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                    SliverToBoxAdapter(child: _titleBlock(d)),
+                    SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                    SliverToBoxAdapter(child: _priceCard(d)),
+                    SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                    // Pick the exact phone first: colour + storage, then trust.
+                    SliverToBoxAdapter(
+                      child: KeyedSubtree(key: _optionsKey, child: _options(d)),
+                    ),
+                    SliverToBoxAdapter(child: SizedBox(height: 22 * d)),
+                    SliverToBoxAdapter(child: _features(d)),
+                    SliverToBoxAdapter(child: SizedBox(height: 18 * d)),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 19 * d),
+                        child: Column(
+                          children: [
+                            PdpCommerceSection(product: p, price: _price),
+                            const SizedBox(height: 10),
+                            FairPriceMeter(product: p, price: _price),
+                            const SizedBox(height: 10),
+                            PdpDiscoverActions(product: p),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(child: SizedBox(height: 26 * d)),
+                    SliverToBoxAdapter(
+                      // Detail sections use smaller design sizes: read larger.
+                      child: MediaQuery(
+                        data: mq.copyWith(
+                          textScaler: const TextScaler.linear(1.28),
+                        ),
+                        child: PdpSections(
+                          product: p,
+                          price: _price,
+                          variantLabel: _variantLabel,
+                          heroVariant: _colors[_color].hero,
+                          highlightsKey: _highlightsKey,
+                          specsKey: _specsKey,
+                          reviewsKey: _reviewsKey,
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(child: SizedBox(height: 40 * d)),
+                  ],
+                ),
+                // Sticky section tabs.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _tabsVisible,
+                    builder: (_, show, child) => AnimatedSlide(
+                      offset: show ? Offset.zero : const Offset(0, -1),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: AnimatedOpacity(
+                        opacity: show ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: IgnorePointer(ignoring: !show, child: child),
+                      ),
+                    ),
+                    child: _SectionTabs(
+                      top: mq.padding.top,
+                      title: p.name,
+                      price: _price,
+                      active: _activeTab,
+                      onTap: _jump,
+                      onBack: () => Navigator.of(context).maybePop(),
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(child: SizedBox(height: 26 * d)),
-                SliverToBoxAdapter(
-                  // Detail sections use smaller design sizes: read larger.
-                  child: MediaQuery(
-                    data: mq.copyWith(
-                      textScaler: const TextScaler.linear(1.28),
-                    ),
-                    child: PdpSections(
-                    product: p,
-                    price: _price,
-                    variantLabel: _variantLabel,
-                    heroVariant: _colors[_color].hero,
-                    highlightsKey: _highlightsKey,
-                    specsKey: _specsKey,
-                    reviewsKey: _reviewsKey,
-                  ),
-                  ),
-                ),
-                SliverToBoxAdapter(child: SizedBox(height: 40 * d)),
               ],
             ),
           ),
@@ -1243,26 +1318,82 @@ class _ProductPageState extends ConsumerState<_ProductPage> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: _PillButton(
-              d: d,
-              filled: false,
-              icon: Icons.shopping_cart_outlined,
-              label: 'Add to Cart'.tr(context),
-              onTap: p.inStock ? () => _add(buy: false) : null,
+          // The exact option being bought; tap to change it.
+          InkWell(
+            onTap: () => _jump(0),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10, left: 2, right: 2),
+              child: Row(
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: Color(_colors[_color].color),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFD5DBEA)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _variantLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4A5372),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    formatPrice(_price),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0B1230),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Change',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1F5BFF),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          SizedBox(width: 19 * d),
-          Expanded(
-            child: _PillButton(
-              d: d,
-              filled: true,
-              icon: Icons.bolt_rounded,
-              label: p.inStock ? 'Buy Now'.tr(context) : 'Sold Out',
-              onTap: p.inStock ? () => _add(buy: true) : null,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _PillButton(
+                  d: d,
+                  filled: false,
+                  icon: Icons.shopping_cart_outlined,
+                  label: 'Add to Cart'.tr(context),
+                  onTap: p.inStock ? () => _add(buy: false) : null,
+                ),
+              ),
+              SizedBox(width: 19 * d),
+              Expanded(
+                child: _PillButton(
+                  d: d,
+                  filled: true,
+                  icon: Icons.bolt_rounded,
+                  label: p.inStock ? 'Buy Now'.tr(context) : 'Sold Out',
+                  onTap: p.inStock ? () => _add(buy: true) : null,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1550,4 +1681,117 @@ class _HeroTag extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Compact top bar with section tabs, shown while scrolling the page.
+class _SectionTabs extends StatelessWidget {
+  const _SectionTabs({
+    required this.top,
+    required this.title,
+    required this.price,
+    required this.active,
+    required this.onTap,
+    required this.onBack,
+  });
+  final double top;
+  final String title;
+  final double price;
+  final ValueListenable<int> active;
+  final ValueChanged<int> onTap;
+  final VoidCallback onBack;
+
+  static const _tabs = ['Overview', 'Highlights', 'Specs', 'Reviews'];
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.only(top: top),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1E2A5A).withValues(alpha: 0.08),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 50,
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0B1230),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 16, left: 8),
+                child: Text(
+                  formatPrice(price),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1F5BFF),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ValueListenableBuilder<int>(
+          valueListenable: active,
+          builder: (_, a, _) => Row(
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onTap(i),
+                    child: Container(
+                      height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: i == a
+                                ? const Color(0xFF1F5BFF)
+                                : const Color(0xFFE6EAF4),
+                            width: i == a ? 3 : 1,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        _tabs[i],
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: i == a
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: i == a
+                              ? const Color(0xFF1F5BFF)
+                              : const Color(0xFF5B6585),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }

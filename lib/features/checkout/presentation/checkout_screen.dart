@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/app_config.dart';
+
 import '../../../core/i18n/i18n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
@@ -26,6 +27,7 @@ import '../../commerce/presentation/widgets/commerce_widgets.dart';
 import '../../commerce/providers/checkout_extras.dart';
 import '../../commerce/services/razorpay_service.dart';
 import '../../orders/providers/orders_provider.dart';
+import '../data/address_service.dart';
 import '../providers/address_provider.dart';
 import 'widgets/address_sheets.dart';
 
@@ -48,6 +50,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _cardCvv = TextEditingController();
   final _cardName = TextEditingController();
   final _note = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // No saved address yet: open the (auto-filling) address form right away.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(addressBookProvider).current == null) {
+        showAddressForm(context);
+      }
+    });
+  }
 
   PaymentMethod get _payment => ref.read(paymentChoiceProvider).method;
   PaymentChoice get _pay => ref.read(paymentChoiceProvider);
@@ -73,7 +86,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
-  bool _expressAvailable(Address? a) => kMetroCities.contains(a?.city);
+  bool _expressAvailable(Address? a) => isMetroCity(a?.city);
 
   double _deliveryFee(CartSummary s, Address? a) =>
       _delivery == _Delivery.express && _expressAvailable(a)
@@ -515,9 +528,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   // ── Delivery speed ──
   Widget _deliveryCard(CartSummary s, Address? a) {
     final now = DateTime.now();
-    final std = DateFormat(
-      'EEE, d MMM',
-    ).format(now.add(Duration(days: kMetroCities.contains(a?.city) ? 2 : 4)));
+    final std = DateFormat('EEE, d MMM')
+        .format(now.add(Duration(days: isMetroCity(a?.city) ? 2 : 4)));
     final exp = DateFormat('EEE, d MMM')
         .format(now.add(const Duration(days: 1)));
     final express = _expressAvailable(a);

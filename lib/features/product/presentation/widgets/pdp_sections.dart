@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../../core/utils/formatters.dart';
+
 import '../../../../core/widgets/app_image.dart';
 import '../../../../core/widgets/common.dart';
 import '../../../../core/widgets/glass.dart';
@@ -12,7 +13,6 @@ import '../../../../data/models/review.dart';
 import '../../../../data/repositories/product_repository.dart';
 import '../../../cart/providers/cart_provider.dart';
 import '../../../catalog/providers/catalog_providers.dart';
-import '../../../checkout/presentation/widgets/address_sheets.dart';
 import '../../../checkout/providers/address_provider.dart';
 import '../../../discover/data/pincode.dart';
 import '../../../discover/presentation/widgets/delivery_check_card.dart';
@@ -22,6 +22,7 @@ import '../../../home/presentation/widgets/home_sheets.dart';
 import '../../../live_review/providers/live_review_provider.dart';
 import '../../../reviews/providers/reviews_provider.dart';
 import '../../../trust/presentation/product_trust_card.dart';
+import '../../../checkout/data/address_service.dart';
 import 'pdp_sheets.dart';
 import 'review_widgets.dart';
 
@@ -455,7 +456,7 @@ class _PdpSectionsState extends ConsumerState<PdpSections> {
     final eta = pin != null
         ? quoteFor(p, pin, price: widget.price).latest
         : DateTime.now().add(
-            Duration(days: kMetroCities.contains(city) ? 2 : 4),
+            Duration(days: isMetroCity(city) ? 2 : 4),
           );
     final free = widget.price >= CartSummary.freeDeliveryThreshold;
     return _card(

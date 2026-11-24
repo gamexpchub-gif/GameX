@@ -6,6 +6,7 @@ import '../../../data/mock/mock_data.dart';
 import '../../../data/models/product.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../catalog/providers/catalog_providers.dart';
+import '../../checkout/providers/address_provider.dart';
 import '../../wishlist/providers/wishlist_provider.dart';
 import '../data/phone_intel.dart';
 
@@ -213,8 +214,14 @@ String _k(double v) => '₹${(v.abs() / 1000).toStringAsFixed(1)}K';
 class PinNotifier extends Notifier<String?> {
   static const _key = 'delivery_pin_v1';
 
+  /// The PIN the buyer checked last, else the default delivery address's.
   @override
-  String? build() => ref.read(localStoreProvider).readString(_key);
+  String? build() {
+    final saved = ref.read(localStoreProvider).readString(_key);
+    if (saved != null && saved.isNotEmpty) return saved;
+    final pin = ref.read(addressBookProvider).current?.pincode ?? '';
+    return pin.length == 6 ? pin : null;
+  }
 
   void set(String pin) {
     state = pin;

@@ -57,6 +57,8 @@ dependencies:
   share_plus: ^13.3.1
   flutter_localizations:
     sdk: flutter
+  geolocator: ^14.0.1
+  geocoding: ^5.0.1
 
 dev_dependencies:
   flutter_test:
