@@ -93,7 +93,17 @@ Now price drops, offer replies, order and wallet updates reach phones even when 
 When a seller taps **Ship**, GAMEX books the courier, gets a real AWB and the buyer sees live scans.
 Sellers' pickup addresses must be added in Shiprocket too if they ship from their own shops.
 
-## 6. Play Console
+## 6. AI support assistant (optional)
+
+Help Center › Live chat is answered by the GAMEX Assistant. With an Anthropic API key it uses
+Claude (sees the customer's orders and your Help articles, hands over to an agent when needed);
+without a key a built-in rule-based assistant answers common questions.
+
+1. console.anthropic.com → Billing (add credit) → API Keys → Create key.
+2. `bash deploy/set-secrets.sh` → `8`.
+3. Agents reply from Admin → **Support** (live chats, tickets, help articles).
+
+## 7. Play Console
 
 1. play.google.com/console → create a developer account (one-time fee, identity verification).
 2. Create app **GAMEX** → upload `build/app/outputs/bundle/release/app-release.aab`.

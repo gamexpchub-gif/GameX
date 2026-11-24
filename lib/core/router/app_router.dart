@@ -28,6 +28,9 @@ import '../../features/reviews/presentation/reviews_screen.dart';
 import '../../features/search/presentation/search_screen.dart';
 import '../../features/service/presentation/health_check_screen.dart';
 import '../../features/service/presentation/repair_screen.dart';
+import '../../features/support/presentation/chat_screen.dart';
+import '../../features/support/presentation/help_center_screen.dart';
+import '../../features/support/presentation/ticket_screens.dart';
 import '../../features/service/presentation/setup_screen.dart';
 import '../../features/service/presentation/tracking_screen.dart';
 import '../../features/shell/presentation/main_shell.dart';
@@ -146,6 +149,24 @@ final appRouter = GoRouter(
     GoRoute(path: '/sale', builder: (_, _) => const SaleScreen()),
     GoRoute(path: '/setup', builder: (_, _) => const SetupScreen()),
     GoRoute(path: '/repair', builder: (_, _) => const RepairScreen()),
+    GoRoute(path: '/support', builder: (_, _) => const HelpCenterScreen()),
+    GoRoute(
+      path: '/support/new',
+      builder: (_, s) =>
+          NewTicketScreen(orderId: s.uri.queryParameters['order']),
+    ),
+    GoRoute(
+      path: '/support/tickets',
+      builder: (_, _) => const MyTicketsScreen(),
+    ),
+    GoRoute(
+      path: '/support/ticket/:id',
+      builder: (_, s) => TicketScreen(id: s.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/support/chat',
+      builder: (_, _) => const SupportChatScreen(),
+    ),
     GoRoute(
       path: '/repairs',
       builder: (_, _) => const ServiceJobsScreen(sell: false),

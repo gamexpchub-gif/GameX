@@ -32,6 +32,7 @@ menu() {
   2) SMS OTP login - Twilio         6) Share links - Android SHA-256
   3) Payments - Razorpay            7) OTP test mode (on/off)
   4) Push - Firebase service account
+  8) AI support assistant - Claude (Anthropic API key)
   s) Show current status            a) APPLY changes & restart
   q) Quit without changes
 M
@@ -88,6 +89,12 @@ while true; do
       read -rp "  Turn OTP test mode ON (codes shown in the app - testing only)? [y/N] " y
       if [[ "$y" =~ ^[Yy]$ ]]; then SET+=("OTP_DEV_MODE=1"); else UNSET+=(OTP_DEV_MODE); fi
       echo "  ✓ queued" ;;
+    8)
+      echo "  console.anthropic.com → API Keys → Create key (add billing credit first)"
+      echo "  Without a key the chat still works with the built-in rule-based assistant."
+      k=$(secret "Anthropic API key (sk-ant-...)")
+      [[ "$k" == sk-ant-* ]] || { echo "  ✗ Key must start with sk-ant-"; continue; }
+      SET+=("ANTHROPIC_API_KEY=$k") && echo "  ✓ AI assistant queued" ;;
     s) status ;;
     q) echo "No changes made."; exit 0 ;;
     a) break ;;

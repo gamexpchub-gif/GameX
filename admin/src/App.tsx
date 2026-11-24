@@ -4,6 +4,7 @@ import {
   Bell,
   TrendingUp,
   Wrench,
+  Headphones,
   ChevronDown,
   Image,
   LayoutDashboard,
@@ -35,6 +36,7 @@ import Sellers from './pages/Sellers';
 import Returns from './pages/Returns';
 import Growth from './pages/Growth';
 import ServiceDesk from './pages/ServiceDesk';
+import Support from './pages/Support';
 
 export default function App() {
   const session = useSession();
@@ -63,6 +65,7 @@ function Shell() {
   const openService = useDB(
     (d) => d.repairs.filter((r) => ['booked', 'assigned', 'inRepair'].includes(r.status)).length + d.sellRequests.filter((s) => ['requested', 'scheduled', 'pickedUp'].includes(s.status)).length,
   );
+  const openSupport = useDB((d) => d.chats.filter((c) => c.mode === 'waiting' || (c.mode === 'agent' && c.unreadAdmin)).length + d.tickets.filter((t) => t.status === 'open' && t.unreadAdmin).length);
   const nav = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/qc', label: 'QC Checking', icon: ShieldCheck, badge: pendingQc, live: true },
@@ -73,6 +76,7 @@ function Shell() {
     { to: '/returns', label: 'Returns & Claims', icon: RotateCcw, badge: openReturns },
     { to: '/growth', label: 'Growth & Payments', icon: TrendingUp, badge: openGrowth },
     { to: '/service', label: 'Service Desk', icon: Wrench, badge: openService },
+    { to: '/support', label: 'Support', icon: Headphones, badge: openSupport, live: openSupport > 0 },
     { to: '/live', label: 'Live Reviews', icon: Video, badge: pendingLive },
     { to: '/banners', label: 'Home Banners', icon: Image },
     { to: '/coupons', label: 'Coupons', icon: Ticket },
@@ -151,6 +155,7 @@ function Shell() {
               <Route path="/returns" element={<Returns />} />
               <Route path="/growth" element={<Growth />} />
               <Route path="/service" element={<ServiceDesk />} />
+              <Route path="/support" element={<Support />} />
               <Route path="/banners" element={<Banners />} />
               <Route path="/coupons" element={<Coupons />} />
               <Route path="/settings" element={<Settings />} />

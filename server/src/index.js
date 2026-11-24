@@ -12,6 +12,7 @@ import { mountAuth } from './auth.js';
 import { openStore } from './storage.js';
 import { mountGrowth } from './growth.js';
 import { mountService } from './service.js';
+import { mountSupport } from './support.js';
 import { mountLaunch, otpProvider } from './launch.js';
 import { CHECKLIST, PROMO_BANNERS, buildSeed, imeiFrom, titleOf } from './seed.js';
 
@@ -63,12 +64,14 @@ function migrate() {
   service?.migrate();
   launch?.migrate();
   auth?.migrate();
+  support?.migrate();
 }
 /** Growth features (offers, wallet, trade-in, alerts). Set up below. */
 let growth;
 let auth;
 let service;
 let launch;
+let support;
 migrate();
 let saveTimer;
 function save() {
@@ -1115,7 +1118,7 @@ admin.patch('/live/:id', (req, res) => {
   res.json(c);
 });
 
-for (const col of ['banners', 'coupons']) {
+for (const col of ['banners', 'coupons', 'helpArticles']) {
   admin.put(`/${col}`, (req, res) => {
     if (!Array.isArray(req.body)) return bad(res, 400, 'Array expected');
     db[col] = req.body;
@@ -1218,6 +1221,7 @@ admin.post('/reset', (_, res) => {
 growth = mountGrowth({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive });
 launch = mountLaunch({ api, site, admin, D: () => db, save, now, uid, find, bad, log, adminBase: ADMIN_BASE, notifyCustomer: (...a) => growth.notifyCustomer(...a) });
 service = mountService({ api, seller, admin, D: () => db, save, now, uid, find, notify, log, bad, titleOf, isLive, notifyCustomer: growth.notifyCustomer });
+support = mountSupport({ api, admin, D: () => db, save, now, uid, find, bad, log, notifyCustomer: (...a) => growth.notifyCustomer(...a) });
 api.use((_, res) => bad(res, 404, 'Unknown endpoint'));
 
 // ---------------- Admin panel (built) ----------------

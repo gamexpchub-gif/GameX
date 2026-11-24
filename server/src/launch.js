@@ -74,6 +74,7 @@ export function mountLaunch(ctx) {
       payments: paymentsLive() ? 'razorpay' : 'demo',
       razorpayKey: paymentsLive() ? env('RAZORPAY_KEY_ID') : null,
       push: !!env('FCM_SERVICE_ACCOUNT'),
+      aiSupport: !!env('ANTHROPIC_API_KEY'),
       courier: !!(env('SHIPROCKET_EMAIL') && env('SHIPROCKET_PASSWORD')),
       demoCatalog: D().settings.demoCatalog !== false,
       cod: { enabled: D().settings.codEnabled !== false, newAccountLimit: D().settings.codLimitNew, maxOpen: D().settings.codMaxOpen },

@@ -372,7 +372,60 @@ export interface QuestionItem {
   createdAt: string;
 }
 
+export interface SupportMsg {
+  id: string;
+  from: 'customer' | 'ai' | 'agent' | 'system';
+  text: string;
+  author?: string;
+  at: string;
+  photos?: string[];
+}
+export interface SupportTicket {
+  id: string;
+  customerId: string;
+  name: string;
+  phone: string;
+  subject: string;
+  category: string;
+  orderId: string | null;
+  orderItem: string | null;
+  priority: 'normal' | 'high' | 'urgent';
+  status: 'open' | 'awaiting_customer' | 'resolved' | 'closed';
+  source: 'app' | 'chat';
+  assignee: string | null;
+  messages: SupportMsg[];
+  createdAt: string;
+  updatedAt: string;
+  slaDueAt: string;
+  unreadAdmin: boolean;
+  rating: { stars: number; comment?: string } | null;
+}
+export interface SupportChat {
+  id: string;
+  customerId: string;
+  name: string;
+  phone: string;
+  mode: 'ai' | 'waiting' | 'agent' | 'closed';
+  messages: SupportMsg[];
+  createdAt: string;
+  updatedAt: string;
+  ticketId: string | null;
+  agent: string | null;
+  unreadAdmin: boolean;
+  topic?: string;
+  rating: { stars: number } | null;
+}
+export interface HelpArticle {
+  id: string;
+  topic: string;
+  title: string;
+  body: string;
+}
+
 export interface DB {
+  tickets: SupportTicket[];
+  chats: SupportChat[];
+  helpArticles: HelpArticle[];
   sellers: Seller[];
   listings: Listing[];
   customers: Customer[];
@@ -401,6 +454,9 @@ export interface DB {
 }
 
 const EMPTY: DB = {
+  tickets: [],
+  chats: [],
+  helpArticles: [],
   sellers: [],
   listings: [],
   customers: [],
@@ -522,7 +578,7 @@ let inflight: Promise<void> | null = null;
 export function refresh(): Promise<void> {
   if (!state.token) return Promise.resolve();
   inflight ??= api<DB>('GET', '/admin/db')
-    .then((db) => set({ db, loaded: true, error: null, syncedAt: Date.now() }))
+    .then((db) => set({ db: { ...EMPTY, ...db }, loaded: true, error: null, syncedAt: Date.now() }))
     .catch((e: Error) => set({ error: e.message }))
     .finally(() => (inflight = null));
   return inflight;
@@ -592,6 +648,7 @@ export function update(fn: (d: DB) => DB) {
   const saves: Promise<unknown>[] = [];
   if (next.banners !== before.banners) saves.push(api('PUT', '/admin/banners', next.banners));
   if (next.coupons !== before.coupons) saves.push(api('PUT', '/admin/coupons', next.coupons));
+  if (next.helpArticles !== before.helpArticles) saves.push(api('PUT', '/admin/helpArticles', next.helpArticles));
   if (next.settings !== before.settings) saves.push(api('PUT', '/admin/settings', next.settings));
   Promise.all(saves)
     .catch((e: Error) => set({ error: e.message }))

@@ -7,740 +7,556 @@ import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/i18n/i18n.dart';
-import '../../../core/widgets/server_sheet.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/common.dart';
-import '../../../core/widgets/glass.dart';
+import '../../../core/widgets/server_sheet.dart';
 import '../../../data/models/app_user.dart';
 import '../../../data/models/order.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../cart/providers/cart_provider.dart';
-import '../../home/presentation/widgets/home_sheets.dart';
-import '../../orders/presentation/order_assistant.dart';
+import '../../commerce/data/commerce_api.dart';
+import '../../commerce/services/notification_service.dart';
 import '../../orders/providers/orders_provider.dart';
+import '../../support/data/support_api.dart';
+import '../../wishlist/providers/wishlist_provider.dart';
 import '../providers/avatar_provider.dart';
 import 'account_sheets.dart';
 
-const _img = 'assets/images/home';
+const _bg = Color(0xFFF1F4FB);
 const _ink = Color(0xFF0B1230);
-const _muted = Color(0xFF4A5372);
+const _muted = Color(0xFF5B6585);
 const _blue = Color(0xFF1F5BFF);
+const _violet = Color(0xFF6D3BFF);
+const _hero = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF0A2A8F), Color(0xFF1F5BFF), Color(0xFF6D3BFF)],
+);
 
-/// Reward points: 1 point per ₹10 spent.
-int rewardPoints(List<Order> orders) =>
-    orders.fold(0.0, (s, o) => s + o.total) ~/ 10;
-
-/// GAMEX wallet: 2% cashback on delivered orders.
-double walletBalance(List<Order> orders) =>
-    (orders.where((o) => o.isDelivered).fold(0.0, (s, o) => s + o.total) * 0.02)
-        .roundToDouble();
-
-/// Account tab, laid out on the design's 852-px grid.
+/// Account tab: profile, order summary, wallet, shopping, services,
+/// help & support and settings. Sized in logical pixels for easy reading.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
+  void _need(BuildContext context, WidgetRef ref, String path) {
+    if (ref.read(authProvider) == null) {
+      context.push('/login?from=${Uri.encodeComponent(path)}');
+    } else {
+      context.push(path);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mq = MediaQuery.of(context);
-    final d = mq.size.width / 852;
     final user = ref.watch(authProvider);
     final orders = ref.watch(ordersProvider);
-    Widget gap(double h) => SizedBox(height: h * d);
-
-    return MediaQuery(
-      data: mq.copyWith(textScaler: TextScaler.noScaling),
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark.copyWith(
-          statusBarColor: Colors.transparent,
-        ),
-        child: Scaffold(
-          backgroundColor: const Color(0xFFEEF2FC),
-          body: AuroraBackground(
-            child: ListView(
-              padding: EdgeInsets.only(
-                top: mq.padding.top + 12 * d,
-                bottom: mq.padding.bottom + 36 * d,
+    final pad = MediaQuery.paddingOf(context);
+    final support = user == null
+        ? null
+        : ref.watch(supportHomeProvider).asData?.value;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: _bg,
+        body: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(walletProvider);
+            ref.invalidate(supportHomeProvider);
+          },
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16, pad.top + 10, 16, pad.bottom + 32),
+            children: [
+              const _TopBar(),
+              const SizedBox(height: 14),
+              _ProfileHero(user: user),
+              const SizedBox(height: 16),
+              _OrderStats(orders: orders),
+              const SizedBox(height: 16),
+              if (user != null) ...[
+                const _WalletCard(),
+                const SizedBox(height: 16),
+              ],
+              _HelpBanner(
+                unread: support?.unread ?? 0,
+                agentsOnline: support?.agentsOnline ?? false,
+                onChat: () => _need(context, ref, '/support/chat'),
+                onHelp: () => context.push('/support'),
               ),
-              children: [
-                _Header(d: d),
-                gap(22),
-                RepaintBoundary(
-                  child: _ProfileCard(d: d, user: user, orders: orders),
+              const SizedBox(height: 24),
+              _Section(
+                title: 'My shopping',
+                rows: [
+                  _Row(Icons.inventory_2_outlined, 'My Orders', 'Track, return or get an invoice', () => context.go('/orders'), badge: orders.where((o) => o.isShipped).length),
+                  _Row(Icons.favorite_border_rounded, 'Wishlist', '${ref.watch(wishlistProvider).length} saved phones', () => context.push('/wishlist')),
+                  _Row(Icons.local_offer_outlined, 'My Offers', 'Prices you proposed and seller replies', () => _need(context, ref, '/offers')),
+                  _Row(Icons.notifications_active_outlined, 'Price & Stock Alerts', 'Get told when prices drop', () => _need(context, ref, '/alerts')),
+                  _Row(Icons.devices_other_outlined, 'My Devices', 'Bought, traded-in and under warranty', () => showDevicesSheet(context)),
+                ],
+              ),
+              _Section(
+                title: 'Sell & services',
+                rows: [
+                  _Row(Icons.swap_horiz_rounded, 'Exchange your phone', 'Instant quote, extra bonus on a new order', () => context.push('/trade-in')),
+                  _Row(Icons.sell_outlined, 'Sell to GAMEX', 'Best price, paid the same day', () => context.push('/sell')),
+                  _Row(Icons.build_outlined, 'Repairs', 'Doorstep pickup, 6-month repair warranty', () => context.push('/repair')),
+                  _Row(Icons.health_and_safety_outlined, 'Phone setup & health check', 'Test your phone, move your data', () => context.push('/setup')),
+                  _Row(Icons.credit_card_outlined, 'EMI & Pay Later', 'No-cost EMI calculator', () => context.push('/emi')),
+                ],
+              ),
+              _Section(
+                title: 'Help & support',
+                rows: [
+                  _Row(Icons.support_agent_rounded, 'Help Center', 'FAQs, guides and contact options', () => context.push('/support')),
+                  _Row(Icons.chat_bubble_outline_rounded, 'Live chat', 'AI assistant 24×7, agents 9 AM – 9 PM', () => _need(context, ref, '/support/chat')),
+                  _Row(
+                    Icons.confirmation_number_outlined,
+                    'My tickets',
+                    support == null || support.openTickets == 0
+                        ? 'Raise and track support requests'
+                        : '${support.openTickets} open ticket${support.openTickets > 1 ? 's' : ''}',
+                    () => _need(context, ref, '/support/tickets'),
+                    badge: support?.unread ?? 0,
+                  ),
+                  _Row(Icons.verified_user_outlined, 'Trust Center', 'Certificates, IMEI check, warranty', () => context.push('/trust')),
+                ],
+              ),
+              _Section(
+                title: 'Settings',
+                rows: [
+                  _Row(Icons.person_outline_rounded, 'Account settings', 'Name, email and password', () => user == null ? context.push('/login?from=${Uri.encodeComponent('/profile')}') : showEditProfileSheet(context)),
+                  _Row(Icons.translate_rounded, 'Language', 'English • हिन्दी • বাংলা', () => showLanguageSheet(context, ref)),
+                  _Row(Icons.notifications_none_rounded, 'Notifications', 'Orders, offers and alerts', () => context.push('/notifications'), badge: ref.watch(unreadNotificationsProvider)),
+                  _Row(Icons.lock_outline_rounded, 'Privacy & security', 'Password, data and account deletion', () => showSecuritySheet(context)),
+                  _Row(Icons.dns_outlined, 'GAMEX server', 'Connection settings', () => showServerSheet(context)),
+                ],
+              ),
+              if (user != null) ...[
+                const SizedBox(height: 4),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFFECACA)),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onPressed: () => confirmLogout(context, ref),
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Log out'),
                 ),
-                gap(22),
-                _Stats(d: d, orders: orders),
-                gap(22),
-                _WalletOffers(d: d, balance: walletBalance(orders)),
-                gap(20),
-                _MenuCard(d: d),
-                gap(36),
-                _SectionTitle(
-                  d: d,
-                  title: 'Support & Services',
-                  onViewAll: () => showHelpSheet(context),
+              ],
+              const SizedBox(height: 18),
+              const Center(
+                child: Text(
+                  'GAMEX v1.0.0 • Made with ♥ in India',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF8C95B0)),
                 ),
-                gap(18),
-                _Services(d: d),
-                gap(34),
-                _SectionTitle(d: d, title: 'Settings & Account'),
-                gap(16),
-                _SettingsCard(d: d, loggedIn: user != null),
-                gap(22),
-                Center(
-                  child: Text(
-                    'GAMEX v1.0.0 • Made with ♥ in India',
-                    style: TextStyle(
-                      fontSize: 17 * d,
-                      color: const Color(0xFF8C95B0),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ───────────────────────────── Top bar ─────────────────────────────
+
+class _TopBar extends ConsumerWidget {
+  const _TopBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    Widget btn(IconData icon, VoidCallback onTap, int count) => Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: _ink, size: 24),
+              if (count > 0)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5283B),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      count > 9 ? '9+' : '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
+    );
+    return Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'My Account',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+              letterSpacing: -0.4,
+            ),
+          ),
+        ),
+        btn(
+          Icons.notifications_none_rounded,
+          () => context.push('/notifications'),
+          ref.watch(unreadNotificationsProvider),
+        ),
+        const SizedBox(width: 10),
+        btn(
+          Icons.shopping_bag_outlined,
+          () => context.push('/cart'),
+          ref.watch(cartCountProvider),
+        ),
+      ],
     );
   }
 }
 
-// ───────────────────────────── Header ─────────────────────────────
+// ───────────────────────────── Profile ─────────────────────────────
 
-class _Header extends ConsumerWidget {
-  const _Header({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cart = ref.watch(cartCountProvider);
-    Widget badge(int n) => Positioned(
-      right: -4 * d,
-      top: -6 * d,
-      child: Container(
-        width: 32 * d,
-        height: 32 * d,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE5283B),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2.5 * d),
-        ),
-        child: Text(
-          '$n',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 17 * d,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-    Widget btn(
-      Widget icon,
-      VoidCallback onTap, {
-      int count = 0,
-      bool square = false,
-    }) => GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 70 * d,
-        height: 70 * d,
-        decoration: BoxDecoration(
-          shape: square ? BoxShape.rectangle : BoxShape.circle,
-          borderRadius: square ? BorderRadius.circular(22 * d) : null,
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2A3D8F).withValues(alpha: 0.1),
-              blurRadius: 14 * d,
-            ),
-          ],
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [icon, if (count > 0) badge(count)],
-        ),
-      ),
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(50 * d, 0, 30 * d, 0),
-      child: Row(
-        children: [
-          Image.asset(
-            '$_img/logo_gamex.png',
-            width: 222 * d,
-            height: 70 * d,
-            filterQuality: FilterQuality.medium,
-          ),
-          const Spacer(),
-          btn(
-            Icon(Icons.notifications_none_rounded, size: 40 * d, color: _ink),
-            () => showNotificationsSheet(context),
-            count: 3,
-          ),
-          SizedBox(width: 18 * d),
-          btn(
-            Icon(Icons.shopping_cart_outlined, size: 38 * d, color: _ink),
-            () => context.push('/cart'),
-            count: cart,
-          ),
-          SizedBox(width: 18 * d),
-          btn(
-            Icon(Icons.center_focus_weak_rounded, size: 40 * d, color: _blue),
-            () => showAppSnack(
-              context,
-              'Scan an IMEI or GAMEX QR code — coming soon',
-            ),
-            square: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Profile card ─────────────────────────────
-
-/// Soft light ribbons on the right of the blue profile card.
-class _LiquidPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    Paint ribbon(double a) => Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0),
-          Colors.white.withValues(alpha: a),
-          const Color(0xFF8FB8FF).withValues(alpha: a * 0.6),
-        ],
-        stops: const [0, 0.6, 1],
-      ).createShader(Offset.zero & size);
-    final p1 = Path()
-      ..moveTo(w * 0.62, h)
-      ..cubicTo(w * 0.72, h * 0.62, w * 0.86, h * 0.72, w, h * 0.35)
-      ..lineTo(w, h * 0.55)
-      ..cubicTo(w * 0.9, h * 0.85, w * 0.78, h * 0.8, w * 0.7, h)
-      ..close();
-    canvas.drawPath(p1, ribbon(0.32));
-    final p2 = Path()
-      ..moveTo(w * 0.7, h * 0.55)
-      ..cubicTo(w * 0.8, h * 0.4, w * 0.9, h * 0.52, w, h * 0.12)
-      ..lineTo(w, h * 0.22)
-      ..cubicTo(w * 0.9, h * 0.6, w * 0.82, h * 0.5, w * 0.74, h * 0.62)
-      ..close();
-    canvas.drawPath(p2, ribbon(0.22));
-    // Warm glow bottom-right.
-    canvas.drawCircle(
-      Offset(w * 1.02, h * 0.95),
-      h * 0.5,
-      Paint()
-        ..shader =
-            RadialGradient(
-              colors: [
-                const Color(0xFFFFE7A8).withValues(alpha: 0.5),
-                Colors.transparent,
-              ],
-            ).createShader(
-              Rect.fromCircle(
-                center: Offset(w * 1.02, h * 0.95),
-                radius: h * 0.5,
-              ),
-            ),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LiquidPainter oldDelegate) => false;
-}
-
-class _ProfileCard extends ConsumerWidget {
-  const _ProfileCard({
-    required this.d,
-    required this.user,
-    required this.orders,
-  });
-  final double d;
+class _ProfileHero extends ConsumerWidget {
+  const _ProfileHero({required this.user});
   final AppUser? user;
-  final List<Order> orders;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final u = user;
     final avatar = ref.watch(avatarProvider);
-    final points = rewardPoints(orders);
-    final since = DateFormat('MMM yyyy').format(u?.joinedAt ?? DateTime.now());
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 30 * d),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(40 * d),
-        child: Container(
-          height: 275 * d,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF0A2A8F), Color(0xFF0D3BC0), Color(0xFF1E5BEA)],
-            ),
+    final hasPhoto = avatar != null && File(avatar).existsSync();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: _hero,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: _blue.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
-          child: Stack(
-            children: [
-              Positioned.fill(child: CustomPaint(painter: _LiquidPainter())),
-              // Avatar.
-              Positioned(
-                left: 40 * d,
-                top: 17 * d,
-                child: GestureDetector(
-                  onTap: u == null ? null : () => showAvatarSheet(context),
-                  child: SizedBox(
-                    width: 140 * d,
-                    height: 140 * d,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 134 * d,
-                          height: 134 * d,
-                          padding: EdgeInsets.all(5 * d),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.25),
-                                blurRadius: 16 * d,
-                              ),
-                            ],
+        ],
+      ),
+      child: u == null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.white24,
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Welcome to GAMEX',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Sign in to track orders, save phones and get help faster.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 15,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: _blue,
+                          minimumSize: const Size.fromHeight(50),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
-                          child: ClipOval(
-                            child: avatar != null
-                                ? Image.file(
-                                    File(avatar),
-                                    fit: BoxFit.cover,
-                                    cacheWidth: 300,
-                                  )
-                                : Container(
-                                    color: const Color(0xFFE6ECFF),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      u == null
-                                          ? 'G'
-                                          : (u.initials.isEmpty
-                                                ? 'G'
-                                                : u.initials),
-                                      style: TextStyle(
-                                        fontSize: 48 * d,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF0D3BC0),
-                                      ),
+                        ),
+                        onPressed: () => context.push(
+                          '/login?from=${Uri.encodeComponent('/profile')}',
+                        ),
+                        child: const Text('Sign in'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white54),
+                          minimumSize: const Size.fromHeight(50),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onPressed: () => context.push(
+                          '/register?from=${Uri.encodeComponent('/profile')}',
+                        ),
+                        child: const Text('Create account'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => showAvatarSheet(context),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CircleAvatar(
+                            radius: 34,
+                            backgroundColor: Colors.white,
+                            backgroundImage: hasPhoto
+                                ? FileImage(File(avatar))
+                                : null,
+                            child: hasPhoto
+                                ? null
+                                : Text(
+                                    u.initials,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      color: _blue,
                                     ),
                                   ),
                           ),
-                        ),
-                        if (u != null)
                           Positioned(
-                            right: 2 * d,
-                            bottom: 2 * d,
+                            right: -2,
+                            bottom: -2,
                             child: Container(
-                              width: 38 * d,
-                              height: 38 * d,
+                              padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
+                                color: _violet,
                                 shape: BoxShape.circle,
-                                color: const Color(0xFF1F5BFF),
                                 border: Border.all(
                                   color: Colors.white,
-                                  width: 3 * d,
+                                  width: 2,
                                 ),
                               ),
-                              child: Icon(
-                                Icons.check_rounded,
-                                size: 22 * d,
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 13,
                                 color: Colors.white,
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Name, email, phone.
-              Positioned(
-                left: 198 * d,
-                right: 120 * d,
-                top: 28 * d,
-                child: u == null
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome to GAMEX',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 30 * d,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 6 * d),
-                          Text(
-                            'Sign in to track orders and earn rewards',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 18 * d,
-                            ),
-                          ),
                         ],
-                      )
-                    : Column(
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
                               Flexible(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    u.name,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 30 * d,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                child: Text(
+                                  u.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
-                              SizedBox(width: 8 * d),
-                              Icon(
+                              const SizedBox(width: 6),
+                              const Icon(
                                 Icons.verified_rounded,
-                                size: 30 * d,
-                                color: const Color(0xFF4F8BFF),
+                                color: Color(0xFF7CF3C5),
+                                size: 20,
                               ),
                             ],
                           ),
-                          SizedBox(height: 10 * d),
+                          const SizedBox(height: 3),
                           Text(
-                            u.email.isEmpty ? u.customerId : u.email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 19 * d,
+                            u.phone?.isNotEmpty == true ? u.phone! : u.email,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 15,
                             ),
                           ),
-                          SizedBox(height: 12 * d),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.call_rounded,
-                                size: 22 * d,
-                                color: Colors.white.withValues(alpha: 0.75),
-                              ),
-                              SizedBox(width: 10 * d),
-                              Text(
-                                _formatPhone(u.phone),
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 19 * d,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              SizedBox(width: 12 * d),
-                              if ((u.phone ?? '').isNotEmpty)
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 12 * d,
-                                    vertical: 3 * d,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF16A34A),
-                                    borderRadius: BorderRadius.circular(14 * d),
-                                  ),
-                                  child: Text(
-                                    'Verified',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16 * d,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-              ),
-              // Edit profile + QR.
-              Positioned(
-                right: 25 * d,
-                top: 56 * d,
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => u == null
-                          ? context.push(
-                              '/login?from=${Uri.encodeComponent('/profile')}',
-                            )
-                          : showEditProfileSheet(context),
-                      child: Container(
-                        height: 50 * d,
-                        padding: EdgeInsets.symmetric(horizontal: 18 * d),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(25 * d),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.28),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              u == null
-                                  ? Icons.login_rounded
-                                  : Icons.edit_outlined,
-                              size: 24 * d,
-                              color: Colors.white,
-                            ),
-                            SizedBox(width: 8 * d),
+                          if (u.email.isNotEmpty &&
+                              u.phone?.isNotEmpty == true)
                             Text(
-                              u == null ? 'Sign In' : 'Edit Profile',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18 * d,
-                                fontWeight: FontWeight.w600,
+                              u.email,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 13.5,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 14 * d),
-                    GestureDetector(
-                      onTap: () => showIdCardSheet(context),
-                      child: Container(
-                        width: 50 * d,
-                        height: 50 * d,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12 * d),
-                        ),
-                        child: Icon(
-                          Icons.qr_code_2_rounded,
-                          size: 36 * d,
-                          color: _blue,
-                        ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-              // GAMEX Prime + points.
-              Positioned(
-                left: 27 * d,
-                right: 23 * d,
-                bottom: 17 * d,
-                child: Container(
-                  height: 76 * d,
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF081A4F).withValues(alpha: 0.72),
-                    borderRadius: BorderRadius.circular(24 * d),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.16),
-                    ),
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
-                      SizedBox(width: 24 * d),
-                      Icon(
+                      const Icon(
                         Icons.workspace_premium_rounded,
-                        size: 46 * d,
-                        color: const Color(0xFFF7C33C),
+                        color: Color(0xFFFFD66B),
+                        size: 22,
                       ),
-                      SizedBox(width: 18 * d),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  'GAMEX Prime',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 21 * d,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                SizedBox(width: 10 * d),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 9 * d,
-                                    vertical: 1 * d,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF5C542),
-                                    borderRadius: BorderRadius.circular(10 * d),
-                                  ),
-                                  child: Text(
-                                    'PRO',
-                                    style: TextStyle(
-                                      color: const Color(0xFF3B2A00),
-                                      fontSize: 14 * d,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              'Member since $since',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 16 * d,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'Member since ${DateFormat('MMM yyyy').format(u.joinedAt ?? DateTime.now())}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      Container(
-                        width: 1.5,
-                        height: 46 * d,
-                        color: Colors.white.withValues(alpha: 0.25),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => showRewardsSheet(context, points),
-                          child: Row(
-                            children: [
-                              SizedBox(width: 28 * d),
-                              Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 38 * d,
-                                color: const Color(0xFFF7C33C),
-                              ),
-                              SizedBox(width: 16 * d),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '${NumberFormat.decimalPattern('en_IN').format(points)} Points',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 21 * d,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      'Worth ${formatPrice((points / 10).roundToDouble())}',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                        fontSize: 16 * d,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                size: 34 * d,
+                      GestureDetector(
+                        onTap: () => showEditProfileSheet(context),
+                        child: const Row(
+                          children: [
+                            Text(
+                              'Edit profile',
+                              style: TextStyle(
                                 color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
                               ),
-                              SizedBox(width: 14 * d),
-                            ],
-                          ),
+                            ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
+              ],
+            ),
     );
-  }
-
-  static String _formatPhone(String? p) {
-    final digits = (p ?? '').replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 10) return p ?? '';
-    final last = digits.substring(digits.length - 10);
-    return '+91 ${last.substring(0, 5)} ${last.substring(5)}';
   }
 }
 
-// ───────────────────────────── Stats ─────────────────────────────
+// ───────────────────────────── Order stats ─────────────────────────────
 
-class _Stats extends StatelessWidget {
-  const _Stats({required this.d, required this.orders});
-  final double d;
+class _OrderStats extends StatelessWidget {
+  const _OrderStats({required this.orders});
   final List<Order> orders;
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      ('ic3d_box', orders.length, 'Total Orders'),
-      ('ic3d_check', orders.where((o) => o.isDelivered).length, 'Delivered'),
-      ('ic3d_truck', orders.where((o) => o.isShipped).length, 'In Transit'),
-      ('ic3d_return', orders.where((o) => o.isReturned).length, 'Returns'),
+      (Icons.inventory_2_outlined, orders.length, 'Orders', _blue),
+      (
+        Icons.local_shipping_outlined,
+        orders.where((o) => o.isShipped).length,
+        'On the way',
+        const Color(0xFFEA580C),
+      ),
+      (
+        Icons.check_circle_outline_rounded,
+        orders.where((o) => o.isDelivered).length,
+        'Delivered',
+        const Color(0xFF16A34A),
+      ),
+      (
+        Icons.assignment_return_outlined,
+        orders.where((o) => o.isReturned).length,
+        'Returns',
+        _violet,
+      ),
     ];
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 36 * d),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
+      decoration: _cardDecoration,
       child: Row(
         children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) SizedBox(width: 17 * d),
+          for (final (i, it) in items.indexed) ...[
+            if (i > 0)
+              Container(width: 1, height: 52, color: const Color(0xFFE6EAF4)),
             Expanded(
-              child: GestureDetector(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
                 onTap: () => context.go('/orders'),
-                child: Container(
-                  height: 125 * d,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(26 * d),
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
-                        blurRadius: 14 * d,
-                        offset: Offset(0, 5 * d),
+                child: Column(
+                  children: [
+                    Icon(it.$1, color: it.$4, size: 24),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${it.$2}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.asset(
-                        '$_img/${items[i].$1}.png',
-                        width: 50 * d,
-                        height: 48 * d,
-                      ),
-                      SizedBox(height: 4 * d),
-                      Text(
-                        '${items[i].$2}',
-                        style: TextStyle(
-                          fontSize: 30 * d,
-                          height: 1.15,
-                          fontWeight: FontWeight.w800,
-                          color: _ink,
-                        ),
-                      ),
-                      Text(
-                        items[i].$3,
-                        style: TextStyle(fontSize: 17 * d, color: _ink),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      it.$3,
+                      style: const TextStyle(fontSize: 12.5, color: _muted),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -751,541 +567,347 @@ class _Stats extends StatelessWidget {
   }
 }
 
-// ───────────────────────────── Wallet + offers ─────────────────────────────
+// ───────────────────────────── Wallet ─────────────────────────────
 
-class _WalletOffers extends StatelessWidget {
-  const _WalletOffers({required this.d, required this.balance});
-  final double d;
-  final double balance;
+class _WalletCard extends ConsumerWidget {
+  const _WalletCard();
 
   @override
-  Widget build(BuildContext context) {
-    Widget card({
-      required List<Color> colors,
-      required String icon,
-      required Widget text,
-      required VoidCallback onTap,
-      required Color arrow,
-    }) => Expanded(
-      child: GestureDetector(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final w = ref.watch(walletProvider).asData?.value;
+    Widget tile(
+      IconData icon,
+      Color color,
+      String label,
+      String value,
+      VoidCallback onTap,
+    ) => Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: Container(
-          height: 84 * d,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30 * d),
-            gradient: LinearGradient(colors: colors),
-            border: Border.all(color: Colors.white, width: 1.6),
-            boxShadow: [
-              BoxShadow(
-                color: colors.last.withValues(alpha: 0.35),
-                blurRadius: 16 * d,
-                offset: Offset(0, 6 * d),
-              ),
-            ],
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
           child: Row(
             children: [
-              SizedBox(width: 26 * d),
-              Image.asset('$_img/$icon.png', width: 62 * d, height: 62 * d),
-              SizedBox(width: 18 * d),
-              Expanded(child: text),
               Container(
-                width: 46 * d,
-                height: 46 * d,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 28 * d,
-                  color: arrow,
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(fontSize: 13, color: _muted),
+                    ),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(width: 16 * d),
             ],
           ),
         ),
       ),
     );
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 30 * d),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: _cardDecoration,
       child: Row(
         children: [
-          card(
-            colors: const [Color(0xFFE4EEFF), Color(0xFFC4DAFF)],
-            icon: 'ic3d_wallet',
-            arrow: _blue,
-            onTap: () => showWalletSheet(context),
-            text: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'GAMEX Wallet',
-                  style: TextStyle(
-                    fontSize: 17 * d,
-                    fontWeight: FontWeight.w600,
-                    color: _ink,
-                  ),
-                ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    formatPrice(balance),
+          tile(
+            Icons.account_balance_wallet_outlined,
+            _blue,
+            'GAMEX Wallet',
+            w == null ? '—' : formatPrice(w.balance),
+            () => context.push('/wallet'),
+          ),
+          Container(width: 1, height: 44, color: const Color(0xFFE6EAF4)),
+          const SizedBox(width: 6),
+          tile(
+            Icons.card_giftcard_rounded,
+            _violet,
+            'Refer & earn',
+            w == null || w.referralCode.isEmpty ? 'Invite' : w.referralCode,
+            () => context.push('/wallet'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────────── Help banner ─────────────────────────────
+
+class _HelpBanner extends StatelessWidget {
+  const _HelpBanner({
+    required this.unread,
+    required this.agentsOnline,
+    required this.onChat,
+    required this.onHelp,
+  });
+  final int unread;
+  final bool agentsOnline;
+  final VoidCallback onChat;
+  final VoidCallback onHelp;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: const Color(0xFFEAF0FF),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xFFD4E0FF)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: _hero,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.support_agent_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Need help?',
                     style: TextStyle(
-                      fontSize: 30 * d,
-                      height: 1.1,
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: _ink,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(width: 18 * d),
-          card(
-            colors: const [Color(0xFFF2EAFF), Color(0xFFDCC9FF)],
-            icon: 'ic3d_offer',
-            arrow: const Color(0xFF6A3DF5),
-            onTap: () => showCouponsListSheet(context),
-            text: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'My Offers',
-                  style: TextStyle(
-                    fontSize: 19 * d,
-                    fontWeight: FontWeight.w700,
-                    color: _ink,
-                  ),
-                ),
-                Text(
-                  '${coupons.length + 1} Active Offers',
-                  style: TextStyle(
-                    fontSize: 17 * d,
-                    color: const Color(0xFF4B3A8C),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ───────────────────────────── Lists ─────────────────────────────
-
-typedef _Row = (IconData, String, String, VoidCallback);
-
-class _ListCard extends StatelessWidget {
-  const _ListCard({required this.d, required this.rows});
-  final double d;
-  final List<_Row> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 30 * d),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(30 * d),
-          border: Border.all(color: Colors.white, width: 1.6),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
-              blurRadius: 18 * d,
-              offset: Offset(0, 6 * d),
-            ),
-          ],
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            children: [
-              for (var i = 0; i < rows.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: 1,
-                    indent: 105 * d,
-                    endIndent: 60 * d,
-                    color: const Color(0xFFE6EAF4),
-                  ),
-                InkWell(
-                  onTap: rows[i].$4,
-                  borderRadius: BorderRadius.circular(30 * d),
-                  child: SizedBox(
-                    height: 68 * d,
-                    child: Row(
-                      children: [
-                        SizedBox(width: 36 * d),
-                        Icon(
-                          rows[i].$1,
-                          size: 38 * d,
-                          color: const Color(0xFF1B2340),
-                        ),
-                        SizedBox(width: 32 * d),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                rows[i].$2.tr(context),
-                                style: TextStyle(
-                                  fontSize: 20 * d,
-                                  fontWeight: FontWeight.w700,
-                                  color: _ink,
-                                ),
-                              ),
-                              Text(
-                                rows[i].$3,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 16 * d,
-                                  color: _muted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 38 * d,
-                          color: const Color(0xFF1B2340),
-                        ),
-                        SizedBox(width: 28 * d),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MenuCard extends StatelessWidget {
-  const _MenuCard({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ListCard(
-      d: d,
-      rows: [
-        (
-          Icons.view_in_ar_outlined,
-          'My Orders',
-          'Track, manage and view all your orders',
-          () => context.go('/orders'),
-        ),
-        (
-          Icons.smartphone_rounded,
-          'My Devices',
-          'Purchased, traded-in and warranty devices',
-          () => showDevicesSheet(context),
-        ),
-        (
-          Icons.favorite_border_rounded,
-          'Wishlist',
-          'Your saved phones and alerts',
-          () => context.push('/wishlist'),
-        ),
-        (
-          Icons.account_balance_wallet_outlined,
-          'Wallet & Refer',
-          'Cashback balance • invite friends, earn ₹500',
-          () => context.push('/wallet'),
-        ),
-        (
-          Icons.handshake_outlined,
-          'My Offers',
-          'Prices you proposed and seller replies',
-          () => context.push('/offers'),
-        ),
-        (
-          Icons.notifications_none_rounded,
-          'Price & Stock Alerts',
-          'Get notified when prices drop or phones restock',
-          () => context.push('/alerts'),
-        ),
-        (
-          Icons.swap_horiz_rounded,
-          'Trade-In / Exchange',
-          'Instant quote for your old phone',
-          () => context.push('/trade-in'),
-        ),
-        (
-          Icons.sell_outlined,
-          'Sell Your Phone',
-          'Instant price, free pickup, paid in 24 hours',
-          () => context.push('/sell'),
-        ),
-        (
-          Icons.build_outlined,
-          'Repairs',
-          'Screen, battery & more with repair warranty',
-          () => context.push('/repair'),
-        ),
-        (
-          Icons.health_and_safety_outlined,
-          'Phone Setup & Health Check',
-          'Test your phone and move your data',
-          () => context.push('/setup'),
-        ),
-        (
-          Icons.credit_card_rounded,
-          'EMI & Pay Later',
-          'No-cost EMI calculator and Pay Later options',
-          () => context.push('/emi'),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.d, required this.title, this.onViewAll});
-  final double d;
-  final String title;
-  final VoidCallback? onViewAll;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 32 * d),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 26 * d,
-              fontWeight: FontWeight.w800,
-              color: _ink,
-              letterSpacing: -0.3 * d,
-            ),
-          ),
-          const Spacer(),
-          if (onViewAll != null)
-            GestureDetector(
-              onTap: onViewAll,
-              child: Row(
-                children: [
                   Text(
-                    'View All',
-                    style: TextStyle(
-                      fontSize: 20 * d,
-                      fontWeight: FontWeight.w600,
-                      color: _blue,
-                    ),
+                    agentsOnline
+                        ? 'AI assistant 24×7 • agents online now'
+                        : 'AI assistant 24×7 • agents 9 AM – 9 PM',
+                    style: const TextStyle(fontSize: 13.5, color: _muted),
                   ),
-                  SizedBox(width: 10 * d),
-                  Icon(Icons.arrow_forward_rounded, size: 26 * d, color: _blue),
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Services extends StatelessWidget {
-  const _Services({required this.d});
-  final double d;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <(IconData, String, VoidCallback, bool)>[
-      (
-        Icons.headset_mic_outlined,
-        'Help Center',
-        () => showHelpSheet(context),
-        false,
-      ),
-      (
-        Icons.chat_outlined,
-        'Live Chat',
-        () => showOrderAssistant(context),
-        true,
-      ),
-      (
-        Icons.verified_user_outlined,
-        'Warranty\nClaim',
-        () => showRequestSheet(
-          context,
-          title: 'Warranty Claim',
-          subtitle: 'Covered under your GAMEX warranty',
-          cta: 'Submit Claim',
-        ),
-        false,
-      ),
-      (
-        Icons.build_outlined,
-        'Service &\nRepair',
-        () => showRequestSheet(
-          context,
-          title: 'Service & Repair',
-          subtitle: 'Doorstep pickup by certified technicians',
-          cta: 'Book Service',
-        ),
-        false,
-      ),
-      (
-        Icons.location_on_outlined,
-        'Pickup &\nReturn',
-        () => showRequestSheet(
-          context,
-          title: 'Pickup & Return',
-          subtitle: 'Free pickup within 7 days of delivery',
-          cta: 'Schedule Pickup',
-        ),
-        false,
-      ),
-    ];
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 30 * d),
-      child: Row(
-        children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) SizedBox(width: 16 * d),
-            Expanded(
-              child: GestureDetector(
-                onTap: items[i].$3,
-                child: Container(
-                  height: 120 * d,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(24 * d),
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2A3D8F).withValues(alpha: 0.07),
-                        blurRadius: 14 * d,
-                        offset: Offset(0, 5 * d),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Icon(items[i].$1, size: 46 * d, color: _blue),
-                          if (items[i].$4)
-                            Positioned(
-                              right: -10 * d,
-                              top: -6 * d,
-                              child: Container(
-                                width: 16 * d,
-                                height: 16 * d,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF22C55E),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2 * d,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      SizedBox(height: 8 * d),
-                      Text(
-                        items[i].$2,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16.5 * d,
-                          height: 1.15,
-                          fontWeight: FontWeight.w600,
-                          color: _ink,
-                        ),
-                      ),
-                    ],
+            if (unread > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5283B),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$unread new',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: _blue,
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onPressed: onChat,
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+                label: const Text('Chat with us'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFFC9D6FF)),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onPressed: onHelp,
+                icon: const Icon(Icons.help_outline_rounded, size: 20),
+                label: const Text('Help Center'),
+              ),
             ),
           ],
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
 
-class _SettingsCard extends ConsumerWidget {
-  const _SettingsCard({required this.d, required this.loggedIn});
-  final double d;
-  final bool loggedIn;
+// ───────────────────────────── Sections ─────────────────────────────
+
+final _cardDecoration = BoxDecoration(
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(22),
+  boxShadow: [
+    BoxShadow(
+      color: const Color(0xFF1E2A5A).withValues(alpha: 0.06),
+      blurRadius: 18,
+      offset: const Offset(0, 6),
+    ),
+  ],
+);
+
+class _Row {
+  const _Row(this.icon, this.title, this.subtitle, this.onTap, {this.badge = 0});
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final int badge;
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.rows});
+  final String title;
+  final List<_Row> rows;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return _ListCard(
-      d: d,
-      rows: [
-        (
-          Icons.verified_user_outlined,
-          'GAMEX Trust Center',
-          'Certificate scan, IMEI check, warranty & returns',
-          () => context.push('/trust'),
-        ),
-        (
-          Icons.person_outline_rounded,
-          'Account Settings',
-          'Profile, email, phone and security',
-          () {
-            if (loggedIn) {
-              showEditProfileSheet(context);
-            } else {
-              context.push('/login?from=${Uri.encodeComponent('/profile')}');
-            }
-          },
-        ),
-        (
-          Icons.translate_rounded,
-          'Language',
-          'English • हिन्दी • বাংলা',
-          () => showLanguageSheet(context, ref),
-        ),
-        (
-          Icons.notifications_none_rounded,
-          'Notifications',
-          'Offers, orders and price alerts',
-          () => context.push('/notifications'),
-        ),
-        (
-          Icons.verified_user_outlined,
-          'Privacy & Security',
-          'Password, 2FA and account protection',
-          () => showSecuritySheet(context),
-        ),
-        (
-          Icons.dns_outlined,
-          'GAMEX Server',
-          'Connection for seller listings & orders',
-          () => showServerSheet(context),
-        ),
-        if (loggedIn)
-          (
-            Icons.logout_rounded,
-            'Log Out',
-            'Sign out of this device',
-            () => confirmLogout(context, ref),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 22),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: _ink,
+            ),
           ),
+        ),
+        Container(
+          decoration: _cardDecoration,
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              children: [
+                for (final (i, r) in rows.indexed) ...[
+                  if (i > 0)
+                    const Divider(
+                      height: 1,
+                      indent: 72,
+                      color: Color(0xFFEDF0F7),
+                    ),
+                  InkWell(
+                    onTap: r.onTap,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF3FF),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Icon(r.icon, color: _blue, size: 22),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  r.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: _ink,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  r.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    color: _muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (r.badge > 0)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE5283B),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${r.badge}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: Color(0xFFA3ABC4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
-    );
-  }
+    ),
+  );
 }

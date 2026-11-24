@@ -30,6 +30,7 @@ const PROTECTED = [
   'GET /wallet/[^/]+$', 'POST /referrals/apply$', 'POST /customers/sync$',
   'POST /repairs$', 'GET /repairs$', 'POST /repairs/[^/]+/cancel$',
   'POST /sell-requests$', 'GET /sell-requests$', 'POST /sell-requests/[^/]+/cancel$',
+  'GET /support/tickets', 'POST /support/tickets', 'GET /support/chat$', 'POST /support/chat/',
   'POST /reviews$', 'POST /payments/razorpay/order$', 'POST /auth/logout$', 'GET /auth/me$', 'PUT /auth/me$',
 ].map((r) => {
   const [m, p] = r.split(' ');
